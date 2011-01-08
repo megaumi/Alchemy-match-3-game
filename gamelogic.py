@@ -7,24 +7,30 @@ class Game(object):
     def __init__(self, grid_size = 10):
         self.grid = [["0" for x in range(grid_size)] for y in range(grid_size)]
         self.colors = ["■", "□", "◆"]
+        
         self.figure_max_size = 4
         
     def run(self):
+        '''Game cycle'''
         while True:
             self.next_figure = self.get_next_figure()
             row, col = self.get_user_input()
+
+            # Put every cell of the figure on the grid
+            for rnum, c_row in enumerate(self.next_figure):
+                for cnum, c_col in enumerate(c_row):
+                    if c_col: self.grid[row+rnum][col+cnum] = c_col
             
-            for c_row, c_col, cell_color in self.next_figure: 
-                self.grid[row + c_row][col + c_col] = cell_color
-            for c_row, c_col, cell_color in self.next_figure:
-                self.handle_matches(row + c_row, col + c_col, cell_color)
+            # Find and destroy matches for every cell of the figure
+            for rnum, c_row in enumerate(self.next_figure):
+                for cnum, c_col in enumerate(c_row):
+                    if c_col: self.handle_matches(row+rnum, col+cnum, c_col)
             
+            # Show the grid
             for row in self.grid: print " ".join(row)
             
     def get_next_figure(self):
         '''Generate new figure and show it to user'''
-        
-        next_figure = [] 
         
         # Based on size of the figure and number of rows get number of cols and empty cells.
         # FIXME: Sometimes this algorithm generates wrong polyominoes (with non-adjacent cells)
@@ -34,7 +40,7 @@ class Game(object):
         if rows == size: cols = 1
         elif size == 4:
             if rows == 3: cols = 2
-            elif rows == 2: cols = 3
+            elif rows == 2: cols = random.choice((2, 3))
             else: cols = 4
         elif size == 3:
             if rows == 2: cols = 2
@@ -43,41 +49,45 @@ class Game(object):
             
         empty = cols * rows - size
         
-        print size, rows, cols, empty
+        next_figure = [["" for col in range(cols)] for row in range(rows)]
         
-        # Generate colors (including empties) for next figure and store them in a temporary array
+        #print size, rows, cols, empty
+        
+        # Generate colors (including empties) for the next figure and store them in a temporary array
         temp_arr = [random.choice(self.colors) for i in range(size)]
-        for i in range(empty): temp_arr.append("")
+        temp_arr.extend([""] * empty)
         
-        # Generate next figure
+        # Generate the next figure
         for row in range(rows):
             for col in range(cols):
                 cell_color = random.choice(temp_arr)
                 temp_arr.remove(cell_color)
-                if cell_color: next_figure.append((row, col, cell_color))
+                next_figure[row][col] = cell_color
         
         #next_figure = [(row, col, temp_arr.pop(random.randrange(0,len(temp_arr)))) for col in range(cols) for row in range(rows)]
                 
-        # Represent next figure in nice human-readable form
-        repr_figure = [[" " for col in range(cols)] for row in range(rows)]
-        
-        for row, col, cell_color in next_figure:
-            repr_figure[row][col] = cell_color
-            
+        # Represent the next figure in nice human-readable form
         print "Figure:"
+        repr_figure = [[col if col else " " for col in row] for row in next_figure]
         for row in repr_figure: print " ".join(row)
         
         return next_figure
         
     def get_user_input(self):
+        
+        rotate = int(raw_input("\nRotate the figure (0 - do not rotate, 1 - rotate 90 clockwise, 2 - 180, etc): "))
+        
+        for i in range(rotate):
+            self.next_figure = zip(*self.next_figure[::-1])
+        
         row, col = [int(var) for var in raw_input("\nInput coords: ")]
         return row, col
         
     def handle_matches(self, row, col, cell_color):
-        '''Find all matches with current cell and destroy all matching cells'''
+        '''Find all matches with the current cell and destroy all matching cells'''
         
         def check_direction(row, col, dir, cell_color, counter, to_del_coords):
-            '''Check next cell in given direction. If it has same color as current cell,
+            '''Check the next cell in given direction. If it has the same color as the current cell,
             store its coords (to delete it later) and pass it to this function recursively
             with incremented counter'''
             
