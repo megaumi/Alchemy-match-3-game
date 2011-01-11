@@ -2,38 +2,77 @@
 # -*- coding: utf-8 -*-
 
 import random
+import pygame
 
 class Game(object):
     def __init__(self, grid_size = 10):
+        
+        pygame.init()
+        pygame.display.set_icon(pygame.image.load("images/icon.png"))
+        self.screen = pygame.display.set_mode((1280, 1024), 0, 32)
+        pygame.display.set_caption("Alchemy")
+        #pygame.mouse.set_visible(False)
+        
+        self.grid_area = pygame.Surface((320,320))
+        
+        self.images = {}
+        
         self.grid = [["0" for x in range(grid_size)] for y in range(grid_size)]
-        self.colors = ["■", "□", "◆"]
+        self.images['cell_bg'] = pygame.image.load("images/cell.png").convert()
+
+        #self.elements = ('mercury', 'saturn', 'jupiter', 'moon', 'venus', 'mars', 'sun')
+        self.elements = ('mercury', 'saturn', 'jupiter', 'moon', 'venus')
+        for element in self.elements:
+            self.images[element] = pygame.image.load("images/%s.png" % element).convert()
+        
+        
+        #self.colors = ('1', '2', '3', '4', '5', '6', '7')
+        self.colors = ('1', '2', '3', '4', '5')
         self.figure_max_size = 4
         
+        self.prev_pos = 0, 0
+    
     def run(self):
         '''Game cycle'''
         while True:
+            self.clock = pygame.time.Clock()
+            # Show the grid
+            self.show_grid()
+            
+            pygame.display.update((0,0, 320, 320))
+            
             # Generate a new figure
             self.next_figure = self.get_next_figure()
-            
+
             # Let the user rotate and place the figure
             row, col = self.place_figure()
-            
+                       
             # Find and destroy matches for every cell of the figure
             for rnum, c_row in enumerate(self.next_figure):
                 for cnum, cell in enumerate(c_row):
                     if cell: self.handle_matches(row + rnum, col + cnum, cell)
-            
-            # Show the grid
-            for row in self.grid: print " ".join(row)
-            
+       
+    def show_grid(self):
+        
+        
+        for rnum, row in enumerate(self.grid):
+            for cnum, cell in enumerate(row):
+                if cell == "0":
+                    self.grid_area.blit(self.images['cell_bg'], (cnum * 32, rnum * 32))
+                else:                    
+                    self.grid_area.blit(self.images[self.elements[int(cell)-1]], (cnum * 32, rnum * 32))
+        #self.screen.fill((0,0,0))
+        self.screen.blit(self.grid_area, (0, 0))
+        
+        
     def get_next_figure(self):
-        '''Generate a new figure and show it to the user'''
+        '''Generate a new figure'''
         
         # Based on size of the figure and number of rows get number of cols and empty cells.
         # FIXME: Sometimes this algorithm generates wrong polyominoes (with non-adjacent cells)
         size = random.randint(1, self.figure_max_size)
         rows = random.randint(1, size)
-        
+         
         if rows == size: cols = 1
         elif size == 4:
             if rows == 3: cols = 2
@@ -43,7 +82,7 @@ class Game(object):
             if rows == 2: cols = 2
             else: cols = 3
         elif size == 2: cols = 2
-            
+ 
         empty = cols * rows - size
         
         next_figure = [["" for col in range(cols)] for row in range(rows)]
@@ -59,51 +98,76 @@ class Game(object):
                 temp_arr.remove(cell)
                 next_figure[row][col] = cell
         
-        #next_figure = [(row, col, temp_arr.pop(random.randrange(0,len(temp_arr)))) for col in range(cols) for row in range(rows)]
-                
-        # Represent the next figure in nice human-readable form
-        print "Figure:"
-        repr_figure = [[cell if cell else " " for cell in row] for row in next_figure]
-        for row in repr_figure: print " ".join(row)
-        
         return next_figure
         
     def place_figure(self):
-        '''Check if the figure can be placed on the grid using rotation and coords that user provided.
-           In case of success, place the figure to the grid and return its coords.'''
-        
-        rotate = int(raw_input("\nRotate the figure (0 - do not rotate, 1 - rotate 90 clockwise, 2 - 180, etc): "))
-        
-        for i in range(rotate):
-            self.next_figure = zip(*self.next_figure[::-1])
+        '''Check if the figure can be placed on the grid using rotation and coords that user provides.
+           In case of success place the figure to the grid and return its coords.'''
         
         # Check if every cell of the figure can be placed on the grid using the coordinates
         # that user provided. If any of the cells cannot be placed (the place is already taken or 
         # it's outside of the grid), user must provide new coords.
-        coords_checked = False
-        while not coords_checked:
-            row, col = [int(var) for var in raw_input("\nInput coordinates: ")]
+
+        def try_it(row, col, mouse):
             check_results = []
+            self.show_grid()
             for rnum, c_row in enumerate(self.next_figure):
                 for cnum, cell in enumerate(c_row):
-                    if not cell: continue       # If the cell is '' it can be placed anywhere
+                    if cell:
+                        image = self.images[self.elements[int(cell)-1]].copy()
+                    else: continue       # If the cell is '' it can be placed anywhere
+                    
                     try:
                         if self.grid[row + rnum][col + cnum] == "0":
                             check_results.append(True)
+                            image = self.images[self.elements[int(cell)-1]].copy()
                         else:
                             print "Oops! You are trying to place %s above %s in (%i, %i)!" %(cell, self.grid[row+rnum][col+cnum], row+rnum, col+cnum)
                             check_results.append(False)
+                            image.fill((50, 50,50), None, pygame.BLEND_SUB)
                     except IndexError: 
                         print "Oops! You are trying to place %s to (%i, %i) which is outside of the grid!" %(cell, row+rnum, col+cnum)
                         check_results.append(False)
+                        image.fill((50, 50, 50), None, pygame.BLEND_SUB)
+                    if cell:
+                        self.grid_area.blit(image, (mouse[0]+ cnum*32, mouse[1] + rnum*32))
+                        self.screen.blit(self.grid_area, (0, 0))
+
             coords_checked = all(check_results)
-        
+            pygame.display.update((0,0,320,320))
+            return coords_checked
+
         # Put every cell of the figure on the grid
-        for rnum, c_row in enumerate(self.next_figure):
-            for cnum, cell in enumerate(c_row):
-                if cell: self.grid[row + rnum][col + cnum] = cell
-        
-        return row, col
+        def put_it(row, col):
+            for rnum, c_row in enumerate(self.next_figure):
+                for cnum, cell in enumerate(c_row):
+                    if cell: 
+                        self.grid[row + rnum][col + cnum] = cell                        
+
+        coords_checked = False
+        while True:
+            self.clock.tick(60)
+            for event in pygame.event.get():
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                    self.next_figure = zip(*self.next_figure[::-1])
+                    self.show_grid()
+                    for rnum, c_row in enumerate(self.next_figure):
+                        for cnum, cell in enumerate(c_row):
+                            if cell:                                
+                                self.grid_area.blit(self.images[self.elements[int(cell)-1]], (event.pos[0]/32*32+ cnum*32, event.pos[1]/32*32 + rnum*32))
+                                self.screen.blit(self.grid_area, (0, 0))
+                    pygame.display.update()
+                elif event.type == pygame.MOUSEBUTTONDOWN and coords_checked:
+                    print "button: %i" %event.button
+                    col, row = event.pos[0]/32, event.pos[1]/32
+                    put_it(row, col)
+                    return row, col
+                if event.type == pygame.MOUSEMOTION:
+                    if abs(self.prev_pos[0] - event.pos[0]) >= 16 or abs(self.prev_pos[1] - event.pos[1]) >= 16:
+                        col, row = [i/32 for i in event.pos]
+                        coords_checked = try_it(row, col, [i/32*32 for i in event.pos])
+                        self.prev_pos = [i for i in event.pos]
+
         
     def handle_matches(self, row, col, cell):
         '''Find all matches with the current cell and destroy all matching cells'''
@@ -160,6 +224,7 @@ class Game(object):
         if match_found: 
             print "!" * 17 + "Yay! Match found!" + "!" * 17
             self.grid[row][col] = "0"
+
             
 def main():
 	
