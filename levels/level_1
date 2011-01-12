@@ -1,0 +1,12 @@
+{
+ "name": "Level 1",
+ "elements": {
+    "1": "mercury",
+    "2": "saturn",
+    "3": "jupiter",
+    "4": "moon",
+    "5": "venus"
+    },
+ "figure_max_size": 4,
+ "bg_image": "bg1.jpg"
+}
