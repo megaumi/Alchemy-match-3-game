@@ -34,23 +34,27 @@ class Game(object):
         self.elements = {}
         
         for i, element in level["elements"].items():
-            self.elements[int(i)] = element
+            self.elements[i] = element
             self.images[element] = self.img_load("images", element + ".png")
         
         self.images["bg_image"] = self.img_load("images", level["bg_image"])
         
-        self.grid = [["0" for x in range(self.grid_size)] for y in range(self.grid_size)]
+        self.grid = [[str(cell) for cell in row] for row in level["field"]]
 
     def set_screen(self):
         self.images['grid'] = self.img_load("images", "grid.jpg")
         self.images['shadow'] = self.img_load("images", "shadow.png")
+        self.images['border'] = self.img_load("images", "border.png")
+        self.images['grid_border'] = self.img_load("images", "grid_border.png")
         
         self.screen.blit(self.images["bg_image"], (0,0))
+        self.screen.blit(self.images['grid_border'], (GRID_OFFSET[0]-32, GRID_OFFSET[1]-32))
         
         self.grid_area = self.images['grid'].copy()
         self.grid_area_rect = self.grid_area.get_rect(topleft = GRID_OFFSET)
         self.update_rects.append(self.grid_area_rect)
         self.show_grid()
+        
         
         self.next_area = pygame.Surface((128, 128))
         self.update_rects.append(self.next_area.get_rect(topleft = NEXT_OFFSET))
@@ -80,14 +84,12 @@ class Game(object):
                 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                 self.figure = zip(*self.figure[::-1])
-
-                mouse = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
-                col, row = (mouse[0]+16)/32, (mouse[1]+16)/32
+                
+                row, col, mouse = self.get_row_col(event.pos)
                 coords_checked = self.check_place(row, col, mouse)
                             
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and coords_checked:
-                mouse = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
-                col, row = (mouse[0]+16)/32, (mouse[1]+16)/32
+                row, col, mouse = self.get_row_col(event.pos)
                 self.place_figure(row, col, mouse)
                 
             if event.type == pygame.MOUSEMOTION:
@@ -96,8 +98,7 @@ class Game(object):
                     pygame.mouse.set_visible(False)
                     mouse_visible = False
 
-                    mouse = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
-                    col, row = (mouse[0]+16)/32, (mouse[1]+16)/32
+                    row, col, mouse = self.get_row_col(event.pos)
                     coords_checked = self.check_place(row, col, mouse)
                 else:
                     if not mouse_visible:
@@ -105,6 +106,14 @@ class Game(object):
                         mouse_visible = True
             
             pygame.display.update(self.update_rects)
+    
+    @staticmethod
+    def get_row_col(pos):
+        '''Transform absolute mouse coordinates into grid-relative
+           and return respective row and column numbers'''
+        mouse = pos[0] - GRID_OFFSET[0], pos[1] - GRID_OFFSET[1]
+        col, row = (mouse[0]+16)/32, (mouse[1]+16)/32
+        return row, col, mouse
     
     def update_screen(self):
         pass
@@ -114,7 +123,7 @@ class Game(object):
         for rnum, c_row in enumerate(self.next_figure):
             for cnum, cell in enumerate(c_row):
                 if cell:
-                    self.next_area.blit(self.images[self.elements[int(cell)]], (cnum*32,rnum*32))
+                    self.next_area.blit(self.images[self.elements[cell]], (cnum*32,rnum*32))
                     self.screen.blit(self.next_area, NEXT_OFFSET)
 
     def show_grid(self):
@@ -123,8 +132,10 @@ class Game(object):
             for cnum, cell in enumerate(row):
                 if cell == "0":
                     self.grid_area.blit(self.images['grid'], (cnum * 32, rnum * 32), (cnum * 32, rnum * 32, 32, 32))
+                elif cell == "b":
+                    self.grid_area.blit(self.images["border"], (cnum * 32, rnum * 32))
                 else:                    
-                    self.grid_area.blit(self.images[self.elements[int(cell)]], (cnum * 32, rnum * 32))
+                    self.grid_area.blit(self.images[self.elements[cell]], (cnum * 32, rnum * 32))
         self.screen.blit(self.grid_area, GRID_OFFSET)
         
         
@@ -160,7 +171,7 @@ class Game(object):
                 cell = random.choice(temp_arr)
                 temp_arr.remove(cell)
                 next_figure[row][col] = cell
- 
+        #print next_figure
         return next_figure
         
     def check_place(self, row, col, mouse):
@@ -170,7 +181,7 @@ class Game(object):
         for rnum, c_row in enumerate(self.figure):
             for cnum, cell in enumerate(c_row):
                 if cell:
-                    cell_image = self.images[self.elements[int(cell)]].copy()
+                    cell_image = self.images[self.elements[cell]].copy()
                 else: continue       # If the cell is '' it can be placed anywhere
                 
                 try:
@@ -233,7 +244,6 @@ class Game(object):
                     counter += 1
                     #print "Found a cell of the same color, incrementing counter..."
                     counter, to_del_coords = check_direction(n_row, n_col, dir, cell, counter, to_del_coords)
-            
             return counter, to_del_coords
 
         up = -1, 0
