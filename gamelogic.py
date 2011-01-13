@@ -34,9 +34,45 @@ class Game(object):
         
         self.update_rects = []
         
+        
         self.load_resources()
+        self.main_menu()
+        self.load_game_screen()
+    
+    def main_menu(self):
+        self.levels = [1,2,3]
+        self.locked_levels = self.levels[1:]
+
+    
+    def load_game_screen(self):
+        
+        self.screen.fill((50,50,50))
+        for i in self.levels: self.screen.blit(self.images['level_%i' %i], (400, 150 + i*100))
+        level_images = [self.images['level_%i' %i] for i in self.levels]
+        self.clock = pygame.time.Clock()
+        while True:
+            self.clock.tick(60)
+            event = pygame.event.poll()
+            pygame.event.clear()
+            
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
                 
-        self.load_level("level_1")
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                for i, image in enumerate(level_images):
+                    if image.get_rect(topleft = (400, 150 + (i+1)*100)).collidepoint(event.pos):
+                        if not i+1 in self.locked_levels:
+                            won = self.load_level("level_%i" %(i+1))
+                            if won and (i+2 in self.locked_levels):
+                                print "here"
+                                self.locked_levels.remove(i+2)
+                            self.load_game_screen()
+                        else: print "This level is blocked!"
+        
+            pygame.display.update()
     
     @staticmethod
     def img_load(dir, file):
@@ -50,16 +86,22 @@ class Game(object):
         self.images['grid_border'] = self.img_load("images", "grid_border.png")
         for element in ELEMENTS.values():
             self.images[element] = self.img_load("images", element + ".png")
+        self.images['level_1'] = self.img_load("images", "level_1.png")
+        self.images['level_2'] = self.img_load("images", "level_2.png")
+        self.images['level_3'] = self.img_load("images", "level_3.png")
     
     def load_level(self, level_id):
-        level_file = open(os.path.join("levels", "level_2"), "r")
+        level_file = open(os.path.join("levels", level_id), "r")
         level = json.loads(level_file.read())
         
         self.grid_size = 15
         self.figure_max_size = level["figure_max_size"]
         
-        self.elements = tuple(level["elements"])
-        self.spoilt = tuple(level["spoilt"])
+        self.elements = level["elements"]
+        self.spoilt = level["spoilt"]
+        self.locked = level["locked"]
+        
+        self.goal = level["goal"]
         
         self.images["bg_image"] = self.img_load("images", level["bg_image"])
         
@@ -72,7 +114,8 @@ class Game(object):
             for cnum, cell in enumerate(row):
                 if cell <> "0" and cell <> "4" and cell <> "7":
                     self.timer_grid[rnum][cnum] = now + 60
-        print self.timer_grid
+        return self.run_level()
+        
 
     def set_screen(self):        
         self.screen.blit(self.images["bg_image"], (0,0))
@@ -90,7 +133,7 @@ class Game(object):
         
         pygame.display.update()
                 
-    def run(self):
+    def run_level(self):
         '''Game cycle'''
         
         # Generate a new figure
@@ -111,7 +154,10 @@ class Game(object):
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    sys.exit()
+                    if not mouse_visible:
+                        pygame.mouse.set_visible(True)
+                        mouse_visible = True
+                    return
                 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                 if self.grid_area_rect.collidepoint(event.pos):
@@ -141,6 +187,12 @@ class Game(object):
                         mouse_visible = True
             self.age_metal()
             pygame.display.update(self.update_rects)
+            
+            if not self.goal:
+                if not mouse_visible:
+                    pygame.mouse.set_visible(True)
+                    mouse_visible = True
+                return True
     
     def age_metal(self):
         changed = False
@@ -230,7 +282,8 @@ class Game(object):
     def check_place(self, row, col, mouse):
         '''Update the grid area, show shadow under the figure, darken cells
            that cannot be placed, blit figure image on the grid area and
-           return True if the figure can be placed in current position.'''
+           return True if the figure can be placed in current position.
+           Obviously this should be refactored.'''
         check_results = []
         figure_image = []
         self.show_grid()
@@ -238,7 +291,7 @@ class Game(object):
             for cnum, cell in enumerate(c_row):
                 if cell:
                     cell_image = self.images[ELEMENTS[cell]].copy()
-                else: continue       # If the cell is '' it can be placed anywhere
+                else: continue       # No need to check an empty cell
                 try:
                     if self.grid[row + rnum][col + cnum] == "0":
                         check_results.append(True)
@@ -248,8 +301,7 @@ class Game(object):
                         cell_image.fill((50, 50,50), None, pygame.BLEND_SUB)
                 except IndexError:
                     check_results.append(False)
-                    
-                # We don't blit the figure cell by cell, but create a list
+                 # We don't blit the figure cell by cell, but create a list
                 # of cell images instead, in order to blit them all at once later.
                 # Otherwise cell images will be overlapped by shadow images.
                 figure_image.append((cell_image, (mouse[0] + cnum*32, mouse[1] + rnum*32)))
@@ -301,7 +353,7 @@ class Game(object):
                 # If the last character is "l" (which indicates a locked cell)
                 # then there's no match for sure
                 if self.grid[n_row][n_col][-1] == "l" or cell[-1] == "l":
-                    return counter, to_del_coords                    
+                    return counter, to_del_coords
                 # We compare only the first character, so that "1" and "1s"
                 # (which are mercury and spoilt mercury) will make a match
                 if self.grid[n_row][n_col][0] == cell[0]:
@@ -327,6 +379,9 @@ class Game(object):
 
         if counter >= 2: 
             match_found = True
+            if cell[0] in self.goal:
+                self.goal[cell[0]] -=1
+                if self.goal[cell[0]] == 0: self.goal.pop(cell[0])
             for d_row, d_col in to_del_coords: 
                 self.grid[d_row][d_col] = "0"
                 self.timer_grid[d_row][d_col] = 0
@@ -340,6 +395,9 @@ class Game(object):
 
         if counter >= 2: 
             match_found = True
+            if cell[0] in self.goal:
+                self.goal[cell[0]] -=1
+                if self.goal[cell[0]] == 0: self.goal.pop(cell[0])
             for d_row, d_col in to_del_coords:
                 self.grid[d_row][d_col] = "0"         
                 self.timer_grid[d_row][d_col] = 0
@@ -349,10 +407,11 @@ class Game(object):
             print "!" * 17 + "Yay! Match found!" + "!" * 17
             self.grid[row][col] = "0"
             self.timer_grid[row][col] = 0
+            print self.goal
+            if not self.goal: print "You won!"
 
 def main():
     game = Game()
-    game.run()
     
 if __name__ == '__main__':
 	main()
