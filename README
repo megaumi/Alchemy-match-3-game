@@ -1,6 +1,9 @@
-Alchemy is a match 3 puzzle game.
-Created by Valentina Mukhamedzhanova (umi).
+Alchemy is a fantasy "match three" puzzle game.
+Copyright 2011 Valentina Mukhamedzhanova <umi@ubuntu.ru>
 
-Planet images are provided by hackcraft.de under CC-BY and CC-BY-SA license.
+Please read COPYING for the source code licensing information.
+
+Images of planet symbols are provided by hackcraft.de under CC-BY and CC-BY-SA license.
 Icon image is based on the work by Ville Seppanen under CC-BY-3.0 license.
-Background image is provided by ac3raven (OpenGameArt.org user) under CC-BY-SA license.
+Game background image is provided by ac3raven (OpenGameArt.org user) under CC-BY-SA license.
+Some of the GUI elements are based on "RPG GUI contruction kit" created by Lamoot and released under CC-BY 3.0.

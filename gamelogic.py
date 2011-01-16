@@ -1,5 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#
+#       "Alchemy: In search of the Philosopher's stone" is a fantasy 
+#       "match three" puzzle game.
+#       
+#       Copyright 2011 Valentina Mukhamedzhanova <umi@ubuntu.ru>
+#       
+#       This program is free software; you can redistribute it and/or modify
+#       it under the terms of the GNU General Public License as published by
+#       the Free Software Foundation; either version 2 of the License, or
+#       (at your option) any later version.
+#       
+#       This program is distributed in the hope that it will be useful,
+#       but WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#       GNU General Public License for more details.
+#       
+#       You should have received a copy of the GNU General Public License
+#       along with this program; if not, write to the Free Software
+#       Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#       MA 02110-1301, USA.
 
 import random
 import json
@@ -42,24 +62,28 @@ class Game(object):
     
     def main_menu(self):
         self.locked_levels = list(LEVELS[1:])
+           
+        self.screen.blit(self.images["menu_bg"], (0,0))
         
-        self.load_game_screen()
-    
-    def load_game_screen(self):
-        '''Show main in-game screen. User can select a level from a list of
-           unlocked levels here.'''
-        self.screen.fill((50,50,50))
+        logo_l = self.biggest_font.render("Alchemy", 1, (255,255,255))
+        title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, (255,255,255))
+        self.screen.blit(logo_l, (320, 90))
+        self.screen.blit(title_l, (345, 190))
         
-        level_image_rects = {}
+        self.screen.blit(self.images["menu"], (360,340))
+        #pygame.draw.rect(self.screen, (50,50,50), (360, 340, 290, 110))
         
-        for i in LEVELS:
-            image = self.images['level_%i' %i]
-            if i not in self.locked_levels:
-                image.fill((255, 255,255), None, pygame.BLEND_ADD)
-            level_image_rects[i] = (image.get_rect(topleft = (40, i*40)))
-            self.screen.blit(image, (40, i*40))
-
+        new_quest_b = self.big_font.render("NEW QUEST", 1, (255,255,255))
+        new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 360))
+        continue_quest_b = self.big_font.render("CONTINUE QUEST", 1, (255,255,255))
+        continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 410))
+        
+        self.screen.blit(new_quest_b, new_quest_b_rect)
+        self.screen.blit(continue_quest_b, continue_quest_b_rect)
+        
         self.clock = pygame.time.Clock()
+        pygame.display.update()
+        
         while True:
             self.clock.tick(60)
             event = pygame.event.poll()
@@ -70,6 +94,36 @@ class Game(object):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if new_quest_b_rect.collidepoint(event.pos):
+                    self.load_game_screen()
+    
+    def load_game_screen(self):
+        '''Show main in-game screen. User can select a level from a list of
+           unlocked levels here.'''
+        self.screen.fill((50,50,50))
+
+        
+        level_image_rects = {}
+        
+        for i in LEVELS:
+            image = self.images['level_%i' %i]
+            if i not in self.locked_levels:
+                image.fill((255, 255,255), None, pygame.BLEND_ADD)
+            level_image_rects[i] = (image.get_rect(topleft = (40, i*40)))
+            self.screen.blit(image, (40, i*40))
+
+        
+        while True:
+            self.clock.tick(60)
+            event = pygame.event.poll()
+            pygame.event.clear()
+            
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.main_menu()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for i in LEVELS:
                     if level_image_rects[i].collidepoint(event.pos):
@@ -82,7 +136,7 @@ class Game(object):
     
     @staticmethod
     def img_load(dir, file):
-        '''Helper function to load images'''
+        '''Helper function for loading images'''
         return pygame.image.load(os.path.join(dir, file)).convert_alpha()        
     
     def load_resources(self):
@@ -95,11 +149,15 @@ class Game(object):
         for element in ELEMENTS.values():
             self.images[element] = self.img_load("images", element + ".png")
         
+        self.biggest_font = pygame.font.Font("fonts/eufm10.ttf", 106)
         self.big_font = pygame.font.Font("fonts/eufm10.ttf", 26)
         self.smaller_font = pygame.font.Font("fonts/eufm10.ttf", 22)
         
         for level in LEVELS:
             self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,0,0))
+            
+        self.images['menu_bg'] = self.img_load("images", "menu_bg.png")
+        self.images['menu'] = self.img_load("images", "menu.png")
     
     def load_level(self, level_id):
         '''Load level from a text file and run it'''
@@ -164,7 +222,7 @@ class Game(object):
         self.victory = False
         
         self.set_screen()
-        self.clock = pygame.time.Clock()
+
         while True:
             
             self.clock.tick(60)
