@@ -25,6 +25,7 @@ import random
 import json
 import os.path
 import sys
+import shutil
 import math
 import pygame
 
@@ -57,31 +58,97 @@ class Game(object):
         self.screen = pygame.display.set_mode(SCREEN_SIZE, 0, 32)
         pygame.display.set_caption("Alchemy")
         
+        self.clock = pygame.time.Clock()
+        
         self.load_resources()
         self.main_menu()
     
     def main_menu(self):
-        self.locked_levels = list(LEVELS[1:])
-           
         self.screen.blit(self.images["menu_bg"], (0,0))
         
         logo_l = self.biggest_font.render("Alchemy", 1, (255,255,255))
+        logo_ls = self.biggest_font.render("Alchemy", 1, (70,70,70))
         title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, (255,255,255))
+        self.screen.blit(logo_ls, (324, 93))
         self.screen.blit(logo_l, (320, 90))
         self.screen.blit(title_l, (345, 190))
         
+        settings_file = open("settings", "r")
+        self.settings = json.loads(settings_file.read())
+        settings_file.close()
+        
+        new_user = False
+        
+        if self.settings["user"] == "None":
+            self.screen.blit(self.images["new_user"], (360,340))
+            self.screen.blit(self.images["ok"], (600,390))
+            pygame.display.update()
+            chars = ""
+            widths = []
+            while True:
+                self.clock.tick(60)
+                event = pygame.event.poll()
+                pygame.event.clear()
+                
+                if event.type == pygame.QUIT:
+                    sys.exit()
+                if event.type == pygame.KEYDOWN:
+                    if 123 > event.key > 96:
+                        if sum(widths) < 193:
+                            char = chr(event.key) if chars else chr(event.key).upper()
+                            chars += char
+                            char_img = self.smaller_font.render(char, 1, (255,255,255))
+                            self.screen.blit(char_img, (393 + sum(widths), 397))
+                            pygame.display.update((393 + sum(widths),397, 32, 32))
+                            widths.append(char_img.get_width()+1)
+                        
+                    if event.key == pygame.K_BACKSPACE and chars:
+                        chars = chars[:-1]
+                        widths.pop(len(chars))                        
+                        self.screen.blit(self.images["new_user"], (393 + sum(widths), 397), (33 + sum(widths), 57, 32, 32))
+                        pygame.display.update((393 + sum(widths), 397, 32, 32))
+
+                    if event.key == pygame.K_ESCAPE:
+                        sys.exit()
+
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if (self.images["ok"].get_rect(topleft = (600, 390)).collidepoint(event.pos)
+                        and chars):
+                        username = chars.lower()
+                        
+                        settings_file = open("settings", "w")
+                        self.settings["user"] = username
+                        settings_file.write(json.dumps(self.settings))
+                        settings_file.close()
+                        
+                        user_file = os.open("%s_progress" %username, os.O_CREAT|os.O_WRONLY)
+                        os.write(user_file, json.dumps({"Score": 0, "locked": [2,3,4]}))
+                        os.close(user_file)
+                        
+                        new_user = True
+                        
+                        break
+        
+        self.username = self.settings["user"]
+        
+        user_file = open("%s_progress" %self.username, "r")
+        self.user = json.loads(user_file.read())
+        user_file.close()
+#        self.locked_levels = self.user["locked"]
+        
         self.screen.blit(self.images["menu"], (360,340))
-        #pygame.draw.rect(self.screen, (50,50,50), (360, 340, 290, 110))
         
         new_quest_b = self.big_font.render("NEW QUEST", 1, (255,255,255))
-        new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 360))
-        continue_quest_b = self.big_font.render("CONTINUE QUEST", 1, (255,255,255))
-        continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 410))
+        new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 410))
+        if new_user:
+            continue_quest_b = self.big_font.render("CONTINUE QUEST", 1, (50,50,50))
+        else:
+            continue_quest_b = self.big_font.render("CONTINUE QUEST", 1, (255,255,255))
+        continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 360))
         
         self.screen.blit(new_quest_b, new_quest_b_rect)
         self.screen.blit(continue_quest_b, continue_quest_b_rect)
         
-        self.clock = pygame.time.Clock()
         pygame.display.update()
         
         while True:
@@ -96,24 +163,39 @@ class Game(object):
                     sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if new_quest_b_rect.collidepoint(event.pos):
-                    self.load_game_screen()
+                    self.user = {"Score": 0, "locked": [2,3,4]}
+                    user_file = open("%s_progress" %self.username, "w")
+                    user_file.write(json.dumps(self.user))
+                    user_file.close()
+                    self.game_screen()
+                if continue_quest_b_rect.collidepoint(event.pos) and not new_user:
+                    self.game_screen()
     
-    def load_game_screen(self):
-        '''Show main in-game screen. User can select a level from a list of
-           unlocked levels here.'''
-        self.screen.fill((50,50,50))
-
+    def game_screen(self):
+        '''Show the main in-game screen. User can select a level from 
+           a list of unlocked levels here.'''
         
         level_image_rects = {}
+        self.screen.blit(self.images["menu_bg"], (0,0))
         
+        logo_l = self.biggest_font.render("Alchemy", 1, (255,255,255))
+        logo_ls = self.biggest_font.render("Alchemy", 1, (70,70,70))
+        title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, (255,255,255))
+        self.screen.blit(logo_ls, (324, 93))
+        self.screen.blit(logo_l, (320, 90))
+        self.screen.blit(title_l, (345, 190))
+        
+        self.screen.blit(self.images["level_menu"], (360,340))
+
+        self.locked_levels = self.user["locked"]
+
         for i in LEVELS:
             image = self.images['level_%i' %i]
-            if i not in self.locked_levels:
-                image.fill((255, 255,255), None, pygame.BLEND_ADD)
-            level_image_rects[i] = (image.get_rect(topleft = (40, i*40)))
-            self.screen.blit(image, (40, i*40))
+            if i in self.locked_levels:
+                image.fill((205, 205, 205), None, pygame.BLEND_SUB)
+            level_image_rects[i] = (image.get_rect(topleft = (380, 320+i*40)))
+            self.screen.blit(image, (380, 320+i*40))
 
-        
         while True:
             self.clock.tick(60)
             event = pygame.event.poll()
@@ -131,7 +213,12 @@ class Game(object):
                             won = self.load_level("level_%i" %i)
                             if won and (i+1 in self.locked_levels):
                                 self.locked_levels.remove(i+1)
-                            self.load_game_screen()    
+                                self.images['level_%i' %(i+1)].fill((255, 255, 255), None, pygame.BLEND_ADD)
+                                self.user["locked"] = self.locked_levels
+                                user_file = open("%s_progress" %self.username, "w")
+                                user_file.write(json.dumps(self.user))
+                                user_file.close()
+                            self.game_screen()    
             pygame.display.update()
     
     @staticmethod
@@ -154,14 +241,18 @@ class Game(object):
         self.smaller_font = pygame.font.Font("fonts/eufm10.ttf", 22)
         
         for level in LEVELS:
-            self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,0,0))
+            self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,255,255))
             
         self.images['menu_bg'] = self.img_load("images", "menu_bg.png")
         self.images['menu'] = self.img_load("images", "menu.png")
+        self.images['level_menu'] = self.img_load("images", "level_menu.png")
+        self.images['new_user'] = self.img_load("images", "new_user.png")
+        self.images['ok'] = self.img_load("images", "ok.png")
+        
+        if not os.path.exists("settings"): shutil.copyfile("settings_init", "settings")
     
     def load_level(self, level_id):
         '''Load level from a text file and run it'''
-        #level_file = open(os.path.join("levels", level_id), "r")
         level_file = open(os.path.join("levels", level_id), "r")
         level = json.loads(level_file.read())
         
@@ -207,22 +298,28 @@ class Game(object):
         goal_label = self.big_font.render("Metals to transmute:", 1, (255, 255, 255))
         self.screen.blit(goal_label, (20, 170))
         self.show_goal()
+        init_mouse = pygame.mouse.get_pos()
         
+        if self.grid_area_rect.collidepoint(init_mouse):
+            pygame.mouse.set_visible(False)
+            self.mouse_visible = False
+            self.mouse_pos = init_mouse[0] - GRID_OFFSET[0], init_mouse[1] - GRID_OFFSET[1]
+
         pygame.display.update()
 
     def run_level(self):
         '''Game cycle'''
-        self.mouse_pos = GRID_OFFSET
-        mouse_visible = True
         
         self.figure = self.get_next_figure()
-        self.create_figure_img()
         self.next_figure = self.get_next_figure()
         
         self.victory = False
         
         self.set_screen()
-
+        self.create_figure_img()
+        self.check_place(self.mouse_pos)
+        self.update_screen()
+        
         while True:
             
             self.clock.tick(60)
@@ -233,24 +330,26 @@ class Game(object):
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    if not mouse_visible:
+                    if not self.mouse_visible:
                         pygame.mouse.set_visible(True)
-                        mouse_visible = True
+                        self.mouse_visible = True
                     return
                 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                 if self.grid_area_rect.collidepoint(event.pos):
                     # Right mouse click rotates the figure
                     self.figure = zip(*self.figure[::-1])
+                    self.mouse_pos = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
                     self.create_figure_img()
-                    coords_checked = self.check_place(event.pos)
+                    coords_checked = self.check_place(self.mouse_pos)
                     self.update_screen()
                             
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self.grid_area_rect.collidepoint(event.pos) and coords_checked:
                     # Left mouse click places the figure
-                    self.place_figure(event.pos)
-                    coords_checked = self.check_place(event.pos)
+                    self.mouse_pos = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
+                    self.place_figure(self.mouse_pos)
+                    coords_checked = self.check_place(self.mouse_pos)
                     self.update_screen()
                 
             if event.type == pygame.MOUSEMOTION:
@@ -260,7 +359,7 @@ class Game(object):
                     mouse_visible = False
                     self.mouse_pos = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
                     self.create_figure_img()
-                    coords_checked = self.check_place(event.pos)
+                    coords_checked = self.check_place(self.mouse_pos)
                     self.update_screen()
                     
                 else:
@@ -272,9 +371,9 @@ class Game(object):
             self.age_metal()
             
             if self.victory:
-                if not mouse_visible:
+                if not self.mouse_visible:
                     pygame.mouse.set_visible(True)
-                    mouse_visible = True
+                    self.mouse_visible = True
                 return True
     
     def age_metal(self):
@@ -296,9 +395,9 @@ class Game(object):
     def get_row_col(pos):
         '''Transform absolute mouse coordinates into grid-relative
            and return respective row and column numbers'''
-        mouse = pos[0] - GRID_OFFSET[0], pos[1] - GRID_OFFSET[1]
-        col, row = (mouse[0]+16)/32, (mouse[1]+16)/32
-        return row, col, mouse
+        #mouse = pos[0] - GRID_OFFSET[0], pos[1] - GRID_OFFSET[1]
+        col, row = (pos[0]+16)/32, (pos[1]+16)/32
+        return row, col
     
     def update_screen(self):
         # Update the grid area
@@ -392,7 +491,7 @@ class Game(object):
         '''Check whether the figure can be placed in current position.
            If not, update shadow and darken appropriate cells of the 
            current figure.'''
-        row, col, mouse = self.get_row_col(pos)
+        row, col = self.get_row_col(pos)
         
         check_results = []
         
@@ -415,7 +514,7 @@ class Game(object):
     def place_figure(self, pos):
         '''Add new values to the grid, handle matches for new values, generate
            the next figure and show it in the next_area'''
-        row, col, mouse = self.get_row_col(pos)
+        row, col = self.get_row_col(pos)
         
         # Update grid values
         for rnum, c_row in enumerate(self.figure):
@@ -499,7 +598,6 @@ class Game(object):
                     self.goal[element] = 0
                 else:
                     self.goal[element] -=1
-                #if self.goal[element] == 0: self.goal.pop(element)
             for d_row, d_col in to_del_coords: 
                 self.grid[d_row][d_col] = "0"
                 self.timer_grid[d_row][d_col] = 0
