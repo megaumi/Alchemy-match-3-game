@@ -1,4 +1,25 @@
 Alchemy is a fantasy "match three" puzzle game.
+You are an alchemist in search of the Philosopher's Stone. You transmute metals and create substances the world has never beheld to complete the three stages of the Great Work.
+
+=== How to run ===
+You need python 2.6 and pygame installed on your system.
+
+If you are using Ubuntu, you already have python installed and only need to install pygame:
+$ sudo apt-get install python-pygame
+
+Now you can navigate to the directory where you unpacked the game and run:
+$ python gamelogic.py
+
+
+=== How to play ===
+Place figures on the field to destroy three or more cells of matching color. Cells represent pieces of metal, as well as different kinds of planet energies (it's a very sacred knowledge, all right?)
+Every level is an alchemical experiment that you do and requires destroying a certain number of certain cells to complete.
+Note however, that base metals tend to lose their alchemical properties with time and become unusable. If you see that a piece of metal is aging, destroy the respective cell as soon as possible! 
+
+Hint: right-click to rotate a figure.
+
+
+=== Licensing information ===
 Copyright 2011 Valentina Mukhamedzhanova <umi@ubuntu.ru>
 
 Please read COPYING for the source code licensing information.

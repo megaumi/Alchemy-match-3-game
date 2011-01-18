@@ -105,8 +105,8 @@ class Game(object):
                     if event.key == pygame.K_BACKSPACE and chars:
                         chars = chars[:-1]
                         widths.pop(len(chars))                        
-                        self.screen.blit(self.images["new_user"], (393 + sum(widths), 397), (33 + sum(widths), 57, 32, 32))
-                        pygame.display.update((393 + sum(widths), 397, 32, 32))
+                        self.screen.blit(self.images["new_user"], (393 + sum(widths), 397), (33 + sum(widths), 57, 22, 32))
+                        pygame.display.update((393 + sum(widths), 397, 22, 32))
 
                     if event.key == pygame.K_ESCAPE:
                         sys.exit()
@@ -562,7 +562,6 @@ class Game(object):
             
             # We don't want to get outside of our grid
             if not (n_row < 0 or n_col < 0 or n_row >= len(self.grid) or n_col >= len(self.grid)):
-                #print "I'm in (%i, %i), counter = %i, checking (%i, %i)..." %(row, col, counter, n_row, n_col)
                 # If the last character is "l" (which indicates a locked cell)
                 # then there's no match for sure
                 if self.grid[n_row][n_col][-1] == "l" or cell[-1] == "l":
@@ -572,7 +571,6 @@ class Game(object):
                 if self.grid[n_row][n_col][0] == cell[0]:
                     to_del_coords.append([n_row, n_col])
                     counter += 1
-                    #print "Found a cell of the same color, incrementing counter..."
                     counter, to_del_coords = check_direction(n_row, n_col, dir, cell, counter, to_del_coords)
             return counter, to_del_coords
 
