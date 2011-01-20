@@ -27,6 +27,7 @@ import os.path
 import sys
 import shutil
 import math
+
 import pygame
 
 SCREEN_SIZE = 1024, 800
@@ -50,6 +51,12 @@ ELEMENTS = {
     }
 
 LEVELS = (1, 2, 3, 4)
+
+
+def img_load(dir, file):
+    '''Helper function for loading images'''
+    return pygame.image.load(os.path.join(dir, file)).convert_alpha()    
+
 
 class Game(object):
     def __init__(self):
@@ -134,7 +141,6 @@ class Game(object):
         user_file = open("%s_progress" %self.username, "r")
         self.user = json.loads(user_file.read())
         user_file.close()
-#        self.locked_levels = self.user["locked"]
         
         self.screen.blit(self.images["menu"], (360,340))
         
@@ -210,7 +216,9 @@ class Game(object):
                 for i in LEVELS:
                     if level_image_rects[i].collidepoint(event.pos):
                         if not i in self.locked_levels:
-                            won = self.load_level("level_%i" %i)
+                            level = Level(self.screen, self.images, self.big_font, self.smaller_font, "level_%i" %i)
+                            won = level.run()
+                            #won = self.load_level("level_%i" %i)
                             if won and (i+1 in self.locked_levels):
                                 self.locked_levels.remove(i+1)
                                 self.images['level_%i' %(i+1)].fill((255, 255, 255), None, pygame.BLEND_ADD)
@@ -221,20 +229,15 @@ class Game(object):
                             self.game_screen()    
             pygame.display.update()
     
-    @staticmethod
-    def img_load(dir, file):
-        '''Helper function for loading images'''
-        return pygame.image.load(os.path.join(dir, file)).convert_alpha()        
-    
     def load_resources(self):
         '''Load images, fonts, sounds, etc'''
         self.images = {}
-        self.images['grid'] = self.img_load("images", "grid.jpg")
-        self.images['shadow'] = self.img_load("images", "shadow.png")
-        self.images['border'] = self.img_load("images", "border.png")
-        self.images['grid_border'] = self.img_load("images", "grid_border.png")
+        self.images['grid'] = img_load("images", "grid.jpg")
+        self.images['shadow'] = img_load("images", "shadow.png")
+        self.images['border'] = img_load("images", "border.png")
+        self.images['grid_border'] = img_load("images", "grid_border.png")
         for element in ELEMENTS.values():
-            self.images[element] = self.img_load("images", element + ".png")
+            self.images[element] = img_load("images", element + ".png")
         
         self.biggest_font = pygame.font.Font("fonts/eufm10.ttf", 106)
         self.big_font = pygame.font.Font("fonts/eufm10.ttf", 26)
@@ -243,16 +246,19 @@ class Game(object):
         for level in LEVELS:
             self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,255,255))
             
-        self.images['menu_bg'] = self.img_load("images", "menu_bg.png")
-        self.images['menu'] = self.img_load("images", "menu.png")
-        self.images['level_menu'] = self.img_load("images", "level_menu.png")
-        self.images['new_user'] = self.img_load("images", "new_user.png")
-        self.images['ok'] = self.img_load("images", "ok.png")
+        self.images['menu_bg'] = img_load("images", "menu_bg.png")
+        self.images['menu'] = img_load("images", "menu.png")
+        self.images['level_menu'] = img_load("images", "level_menu.png")
+        self.images['new_user'] = img_load("images", "new_user.png")
+        self.images['ok'] = img_load("images", "ok.png")
         
         if not os.path.exists("settings"): shutil.copyfile("settings_init", "settings")
-    
-    def load_level(self, level_id):
-        '''Load level from a text file and run it'''
+
+
+class Level(object):
+    def __init__(self, screen, images, big_font, smaller_font, level_id):
+        '''Load a level from a text file and run it'''
+        self.screen = screen
         level_file = open(os.path.join("levels", level_id), "r")
         level = json.loads(level_file.read())
         
@@ -265,7 +271,14 @@ class Game(object):
         
         self.goal = level["goal"]
         
-        self.images["bg_image"] = self.img_load("images", level["bg_image"])
+        self.images = images
+        
+        self.images["bg_image"] = img_load("images", level["bg_image"])
+        
+        self.big_font = big_font
+        self.smaller_font = smaller_font
+        
+        self.clock = pygame.time.Clock()
         
         self.grid = [[str(cell) for cell in row] for row in level["field"]]
         
@@ -275,39 +288,8 @@ class Game(object):
             for cnum, cell in enumerate(row):
                 if cell <> "0" and cell <> "4" and cell <> "7" and cell <> "b":
                     self.timer_grid[rnum][cnum] = now + 60 + random.randint(0,5)
-        return self.run_level()
 
-    def set_screen(self):
-        '''Set screen for current level'''
-        self.update_rects = []
-        self.screen.blit(self.images["bg_image"], (0, 0))
-        self.screen.blit(self.images['grid_border'], (GRID_OFFSET[0]-32, GRID_OFFSET[1]-32))
-        
-        self.grid_area = self.images['grid'].copy()
-        self.grid_area_rect = self.grid_area.get_rect(topleft = GRID_OFFSET)
-        self.update_rects.append(self.grid_area_rect)
-        self.show_grid()
-        
-        next_label = self.big_font.render("Next:", 1, (255, 255, 255))
-        self.screen.blit(next_label, (20, 10))
-        
-        self.next_area = pygame.Surface((128, 128))
-        self.update_rects.append(self.next_area.get_rect(topleft = NEXT_OFFSET))
-        self.show_next()
-        
-        goal_label = self.big_font.render("Metals to transmute:", 1, (255, 255, 255))
-        self.screen.blit(goal_label, (20, 170))
-        self.show_goal()
-        init_mouse = pygame.mouse.get_pos()
-        
-        if self.grid_area_rect.collidepoint(init_mouse):
-            pygame.mouse.set_visible(False)
-            self.mouse_visible = False
-            self.mouse_pos = init_mouse[0] - GRID_OFFSET[0], init_mouse[1] - GRID_OFFSET[1]
-
-        pygame.display.update()
-
-    def run_level(self):
+    def run(self):
         '''Game cycle'''
         
         self.figure = self.get_next_figure()
@@ -376,79 +358,6 @@ class Game(object):
                     self.mouse_visible = True
                 return True
     
-    def age_metal(self):
-        changed = False
-        now = pygame.time.get_ticks()/1000
-        for rnum, row in enumerate(self.timer_grid):
-            for cnum, cell in enumerate(row):
-                if cell and cell <= now:
-                    if self.grid[rnum][cnum][-1] <> "s" and self.grid[rnum][cnum] <> "o" and self.grid[rnum][cnum] <> "b":
-                        self.grid[rnum][cnum] = self.grid[rnum][cnum] + "s"
-                        self.timer_grid[rnum][cnum] = now + 60 + random.randint(0,5)
-                    else:
-                        self.grid[rnum][cnum] = "o" 
-                        self.timer_grid[rnum][cnum] = 0
-                    changed = True
-        if changed: self.update_screen()
-    
-    @staticmethod
-    def get_row_col(pos):
-        '''Transform absolute mouse coordinates into grid-relative
-           and return respective row and column numbers'''
-        #mouse = pos[0] - GRID_OFFSET[0], pos[1] - GRID_OFFSET[1]
-        col, row = (pos[0]+16)/32, (pos[1]+16)/32
-        return row, col
-    
-    def update_screen(self):
-        # Update the grid area
-        self.show_grid()
-
-        # Show the shadow of the current figure
-        for coords in self.shadow:
-            self.grid_area.blit(self.images['shadow'], coords)
-
-        # Show the figure
-        for cell in self.figure_image.values():
-            self.grid_area.blit(*cell)
-        self.screen.blit(self.grid_area, GRID_OFFSET)
-
-        pygame.display.update(self.update_rects)
-
-    def show_goal(self):
-        '''Update screen in the goal area''' 
-        goal_labels = []
-        # Create labels for the level goal
-        for metal, quantity in self.goal.items():
-            goal_label = "%s: %i" %(ELEMENTS[metal].capitalize(), quantity)
-            goal_labels.append(self.smaller_font.render(goal_label, 1, (255,255,255)))
-        # Show labels
-        for i, label in enumerate(goal_labels):
-            self.screen.blit(self.images["bg_image"], (20, 205 + i*25), (20, 205 + i*25, 120, 25))
-            self.screen.blit(label, (20, 205 + i*25))
-            rect = (20, 205 + i*25, 120, 25)
-            if rect not in self.update_rects: self.update_rects.append(rect)
-    
-    def show_next(self):
-        '''Update screen in the next figure area'''
-        self.next_area.fill((0,0,0))
-        for rnum, c_row in enumerate(self.next_figure):
-            for cnum, cell in enumerate(c_row):
-                if cell:
-                    self.next_area.blit(self.images[ELEMENTS[cell]], (cnum*32,rnum*32))
-                    self.screen.blit(self.next_area, NEXT_OFFSET)
-
-    def show_grid(self):
-        '''Update screen in the grid area cell by cell'''
-        for rnum, row in enumerate(self.grid):
-            for cnum, cell in enumerate(row):
-                if cell == "0":
-                    self.grid_area.blit(self.images['grid'], (cnum * 32, rnum * 32), (cnum * 32, rnum * 32, 32, 32))
-                elif cell == "b":
-                    self.grid_area.blit(self.images["border"], (cnum * 32, rnum * 32))
-                else:                    
-                    self.grid_area.blit(self.images[ELEMENTS[cell]], (cnum * 32, rnum * 32))
-        self.screen.blit(self.grid_area, GRID_OFFSET)
-
     def get_next_figure(self):
         '''Generate a new figure'''
         
@@ -486,7 +395,49 @@ class Game(object):
                 next_figure[row][col] = cell
         
         return next_figure
+ 
+    def set_screen(self):
+        '''Set screen for current level'''
+        self.update_rects = []
+        self.screen.blit(self.images["bg_image"], (0, 0))
+        self.screen.blit(self.images['grid_border'], (GRID_OFFSET[0]-32, GRID_OFFSET[1]-32))
         
+        self.grid_area = self.images['grid'].copy()
+        self.grid_area_rect = self.grid_area.get_rect(topleft = GRID_OFFSET)
+        self.update_rects.append(self.grid_area_rect)
+        self.show_grid()
+        
+        next_label = self.big_font.render("Next:", 1, (255, 255, 255))
+        self.screen.blit(next_label, (20, 10))
+        
+        self.next_area = pygame.Surface((128, 128))
+        self.update_rects.append(self.next_area.get_rect(topleft = NEXT_OFFSET))
+        self.show_next()
+        
+        goal_label = self.big_font.render("Metals to transmute:", 1, (255, 255, 255))
+        self.screen.blit(goal_label, (20, 170))
+        self.show_goal()
+        init_mouse = pygame.mouse.get_pos()
+        
+        if self.grid_area_rect.collidepoint(init_mouse):
+            pygame.mouse.set_visible(False)
+            self.mouse_visible = False
+            self.mouse_pos = init_mouse[0] - GRID_OFFSET[0], init_mouse[1] - GRID_OFFSET[1]
+
+        pygame.display.update()
+       
+    def create_figure_img(self):
+        '''Create a dict containing images for every cell of the figure and their
+           coordinates in order to blit all cell images when updating screen.'''
+        self.figure_image = {}
+        for rnum, c_row in enumerate(self.figure):
+            for cnum, cell in enumerate(c_row):
+                if cell:
+                    cell_image = self.images[ELEMENTS[cell]].copy()
+                else: continue       # No need to check an empty cell
+                self.figure_image[rnum, cnum] = [cell_image, [self.mouse_pos[0] + cnum*32, self.mouse_pos[1] + rnum*32]]
+        self.shadow = []
+    
     def check_place(self, pos):
         '''Check whether the figure can be placed in current position.
            If not, update shadow and darken appropriate cells of the 
@@ -510,6 +461,21 @@ class Game(object):
 
         coords_checked = all(check_results)
         return coords_checked       
+    
+    def update_screen(self):
+        # Update the grid area
+        self.show_grid()
+
+        # Show the shadow of the current figure
+        for coords in self.shadow:
+            self.grid_area.blit(self.images['shadow'], coords)
+
+        # Show the figure
+        for cell in self.figure_image.values():
+            self.grid_area.blit(*cell)
+        self.screen.blit(self.grid_area, GRID_OFFSET)
+
+        pygame.display.update(self.update_rects)
 
     def place_figure(self, pos):
         '''Add new values to the grid, handle matches for new values, generate
@@ -536,19 +502,63 @@ class Game(object):
         
         # Update visuals
         self.show_next()
-        
-    def create_figure_img(self):
-        '''Create a dict containing images for every cell of the figure and their
-           coordinates in order to blit all cell images when updating screen.'''
-        self.figure_image = {}
-        for rnum, c_row in enumerate(self.figure):
+    
+    def age_metal(self):
+        changed = False
+        now = pygame.time.get_ticks()/1000
+        for rnum, row in enumerate(self.timer_grid):
+            for cnum, cell in enumerate(row):
+                if cell and cell <= now:
+                    if self.grid[rnum][cnum][-1] <> "s" and self.grid[rnum][cnum] <> "o" and self.grid[rnum][cnum] <> "b":
+                        self.grid[rnum][cnum] = self.grid[rnum][cnum] + "s"
+                        self.timer_grid[rnum][cnum] = now + 60 + random.randint(0,5)
+                    else:
+                        self.grid[rnum][cnum] = "o" 
+                        self.timer_grid[rnum][cnum] = 0
+                    changed = True
+        if changed: self.update_screen()
+    
+    @staticmethod
+    def get_row_col(pos):
+        '''Return row and column numbers for current mouse position'''
+        col, row = (pos[0]+16)/32, (pos[1]+16)/32
+        return row, col
+
+    def show_goal(self):
+        '''Update screen in the goal area''' 
+        goal_labels = []
+        # Create labels for the level goal
+        for metal, quantity in self.goal.items():
+            goal_label = "%s: %i" %(ELEMENTS[metal].capitalize(), quantity)
+            goal_labels.append(self.smaller_font.render(goal_label, 1, (255,255,255)))
+        # Show labels
+        for i, label in enumerate(goal_labels):
+            self.screen.blit(self.images["bg_image"], (20, 205 + i*25), (20, 205 + i*25, 120, 25))
+            self.screen.blit(label, (20, 205 + i*25))
+            rect = (20, 205 + i*25, 120, 25)
+            if rect not in self.update_rects: self.update_rects.append(rect)
+    
+    def show_next(self):
+        '''Update screen in the next figure area'''
+        self.next_area.fill((0,0,0))
+        for rnum, c_row in enumerate(self.next_figure):
             for cnum, cell in enumerate(c_row):
                 if cell:
-                    cell_image = self.images[ELEMENTS[cell]].copy()
-                else: continue       # No need to check an empty cell
-                self.figure_image[rnum, cnum] = [cell_image, [self.mouse_pos[0] + cnum*32, self.mouse_pos[1] + rnum*32]]
-        self.shadow = []
-    
+                    self.next_area.blit(self.images[ELEMENTS[cell]], (cnum*32,rnum*32))
+                    self.screen.blit(self.next_area, NEXT_OFFSET)
+
+    def show_grid(self):
+        '''Update screen in the grid area cell by cell'''
+        for rnum, row in enumerate(self.grid):
+            for cnum, cell in enumerate(row):
+                if cell == "0":
+                    self.grid_area.blit(self.images['grid'], (cnum * 32, rnum * 32), (cnum * 32, rnum * 32, 32, 32))
+                elif cell == "b":
+                    self.grid_area.blit(self.images["border"], (cnum * 32, rnum * 32))
+                else:                    
+                    self.grid_area.blit(self.images[ELEMENTS[cell]], (cnum * 32, rnum * 32))
+        self.screen.blit(self.grid_area, GRID_OFFSET)
+        
     def handle_matches(self, row, col, cell):
         '''Find all matches with the current cell and destroy all matching cells'''
         
@@ -625,7 +635,7 @@ class Game(object):
             self.timer_grid[row][col] = 0
             self.show_goal()
             if all([quantity == 0 for quantity in self.goal.values()]): self.victory = True
-
+                                    
 def main():
     game = Game()
     

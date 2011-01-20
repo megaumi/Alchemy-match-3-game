@@ -1,5 +1,5 @@
 Alchemy is a fantasy "match three" puzzle game.
-You are an alchemist in search of the Philosopher's Stone. You transmute metals and create substances the world has never beheld to complete the three stages of the Great Work.
+You are an alchemist in search of the Philosopher's Stone. To complete the three stages of the Great Work you transmute metals and create substances the world has never beheld!
 
 === How to run ===
 You need python 2.6 and pygame installed on your system.
@@ -12,9 +12,9 @@ $ python gamelogic.py
 
 
 === How to play ===
-Place figures on the field to destroy three or more cells of matching color. Cells represent pieces of metal, as well as different kinds of planet energies (it's a very sacred knowledge, all right?)
-Every level is an alchemical experiment that you do and requires destroying a certain number of certain cells to complete.
-Note however, that base metals tend to lose their alchemical properties with time and become unusable. If you see that a piece of metal is aging, destroy the respective cell as soon as possible! 
+Place the figures on the field to destroy three or more cells of matching color. Cells represent pieces of metal as well as different kinds of planet energies (it's a very sacred knowledge, all right?)
+At each level you are doing an alchemical experiment and you have to destroy a certain number of certain cells to complete it.
+Note however, that base metals tend to lose their alchemical properties with time and become unusable. If you see that a piece of metal is aging, use it as soon as possible!
 
 Hint: right-click to rotate a figure.
 
