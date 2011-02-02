@@ -546,8 +546,6 @@ class Level(object):
         rotations = [self.figure]
         for i in range(3):
             rotations.append(zip(*rotations[i][::-1]))
-
-        break_loops = False
         
         # We look for a place for any rotation of the figure
         for figure in rotations:
@@ -571,21 +569,13 @@ class Level(object):
                                 check_results.append(False)
                     
                     # Check if all cells of current figure can be placed in current position of the grid.
-                    # If yes, no need to check any other rotation or positions, so we break all loops.
+                    # If yes, then there is no need to check any other rotation or positions.
                     can_place = all(check_results)
-                    
                     if can_place:
-                        break_loops = True
-                        break
-                        
-                if break_loops:
-                    break
-            if break_loops:
-                break
-                
-        # If we did not break at some point then no place was found for current figure => the game is lost
-        else:
-            self.defeat = True
+                        return
+        
+        # If we did not return at some point then no place was found for current figure => the game is lost
+        self.defeat = True
     
     def update_screen(self):
         '''Update the grid, the figure image and its shadow.
