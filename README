@@ -8,7 +8,7 @@ If you are using Ubuntu, you already have python installed and only need to inst
 $ sudo apt-get install python-pygame
 
 Now you can navigate to the directory where you unpacked the game and run:
-$ python gamelogic.py
+$ python alchemy.py
 
 
 === How to play ===

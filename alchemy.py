@@ -144,12 +144,12 @@ class Game(object):
         
         self.screen.blit(self.images["menu"], (360,340))
         
-        new_quest_b = self.big_font.render("NEW QUEST", 1, (255,255,255))
+        new_quest_b = self.big_font.render("New Quest", 1, (255,255,255))
         new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 410))
         if new_user:
-            continue_quest_b = self.big_font.render("CONTINUE QUEST", 1, (50,50,50))
+            continue_quest_b = self.big_font.render("Continue Quest", 1, (50,50,50))
         else:
-            continue_quest_b = self.big_font.render("CONTINUE QUEST", 1, (255,255,255))
+            continue_quest_b = self.big_font.render("Continue Quest", 1, (255,255,255))
         continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 360))
         
         self.screen.blit(new_quest_b, new_quest_b_rect)
@@ -218,7 +218,6 @@ class Game(object):
                         if not i in self.locked_levels:
                             level = Level(self.screen, self.images, self.big_font, self.smaller_font, "level_%i" %i)
                             won = level.run()
-                            #won = self.load_level("level_%i" %i)
                             if won and (i+1 in self.locked_levels):
                                 self.locked_levels.remove(i+1)
                                 self.images['level_%i' %(i+1)].fill((255, 255, 255), None, pygame.BLEND_ADD)
@@ -259,6 +258,7 @@ class Level(object):
     def __init__(self, screen, images, big_font, smaller_font, level_id):
         '''Load a level from a text file and run it'''
         self.screen = screen
+        self.level_id = level_id
         level_file = open(os.path.join("levels", level_id), "r")
         level = json.loads(level_file.read())
         
@@ -353,11 +353,44 @@ class Level(object):
             self.age_metal()
             
             if self.victory:
-                if not self.mouse_visible:
-                    pygame.mouse.set_visible(True)
-                    self.mouse_visible = True
+                self.on_victory()
                 return True
     
+    def on_victory(self):
+        '''Show a "Well done!" message to the user'''
+        
+        if not self.mouse_visible:
+            pygame.mouse.set_visible(True)
+            self.mouse_visible = True
+        
+        # Remove the image of the figure and its shadow from the grid
+        self.show_grid()
+        
+        # Darken the game screen
+        self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
+        
+        # Show the message window and the "Well done!" label
+        self.screen.blit(self.images["menu"], (360, 340))
+        win_label = self.big_font.render("Well done!", 1, (255, 255, 255))
+        self.screen.blit(win_label, (445, 380))
+        
+        pygame.display.update()
+        
+        # Wait for the user's input
+        while True:
+            self.clock.tick(60)
+            event = pygame.event.poll()
+            pygame.event.clear()
+            
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+            # Left mouse click returns us to the games screen
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                return
+                    
     def get_next_figure(self):
         '''Generate a new figure'''
         
@@ -463,6 +496,11 @@ class Level(object):
         return coords_checked       
     
     def update_screen(self):
+        '''Update the grid, the figure image and its shadow.
+           This function is called every time the user moves or left-clicks
+           his mouse or rotates the figure.
+           It is also called before the game loop (right after the screen
+           has been set), and from self.age_metal().'''
         # Update the grid area
         self.show_grid()
 
@@ -504,6 +542,8 @@ class Level(object):
         self.show_next()
     
     def age_metal(self):
+        '''Check if one or more pieces of metal aged. 
+           If yes, update the timers and the screen.'''
         changed = False
         now = pygame.time.get_ticks()/1000
         for rnum, row in enumerate(self.timer_grid):
