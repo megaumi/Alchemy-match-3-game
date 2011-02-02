@@ -259,7 +259,7 @@ class Level(object):
         '''Load a level from a text file and run it'''
         self.screen = screen
         self.level_id = level_id
-        level_file = open(os.path.join("levels", level_id), "r")
+        level_file = open(os.path.join("levels", "level_5"), "r")
         level = json.loads(level_file.read())
         
         self.grid_size = 15
@@ -291,15 +291,17 @@ class Level(object):
 
     def run(self):
         '''Game cycle'''
+
+        self.victory = False
+        self.defeat = False
         
         self.figure = self.get_next_figure()
         self.next_figure = self.get_next_figure()
-        
-        self.victory = False
+        self.global_check_place()
         
         self.set_screen()
         self.create_figure_img()
-        self.check_place(self.mouse_pos)
+        coords_checked = self.check_place(self.mouse_pos)
         self.update_screen()
         
         while True:
@@ -355,6 +357,10 @@ class Level(object):
             if self.victory:
                 self.on_victory()
                 return True
+                
+            if self.defeat:
+                self.on_defeat()
+                return False
     
     def on_victory(self):
         '''Show a "Well done!" message to the user'''
@@ -392,7 +398,9 @@ class Level(object):
                 return
                     
     def get_next_figure(self):
-        '''Generate a new figure'''
+        '''Generate a new figure.
+           This function is called from self.run() to generate 2 initial figures
+           and then from self.place_figure() every time we need a new figure.'''
         
         # Based on size of the figure and number of rows get number of cols and empty cells.
         # FIXME: Sometimes this algorithm generates wrong polyominoes (with non-adjacent cells)
@@ -426,8 +434,43 @@ class Level(object):
                 cell = random.choice(temp_arr)
                 temp_arr.remove(cell)
                 next_figure[row][col] = cell
-        
+                
         return next_figure
+
+    def on_defeat(self):
+        '''Show a "Try again!" message to the user'''
+        
+        if not self.mouse_visible:
+            pygame.mouse.set_visible(True)
+            self.mouse_visible = True
+        
+        # Remove the image of the figure and its shadow from the grid
+        self.show_grid()
+        
+        # Darken the game screen
+        self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
+        
+        # Show the message window and the "Try again!" label
+        self.screen.blit(self.images["menu"], (360, 340))
+        win_label = self.big_font.render("Try again!", 1, (255, 255, 255))
+        self.screen.blit(win_label, (445, 380))
+        
+        pygame.display.update()
+        
+        # Wait for the user's input
+        while True:
+            self.clock.tick(60)
+            event = pygame.event.poll()
+            pygame.event.clear()
+            
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+            # Left mouse click returns us to the games screen
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                return
  
     def set_screen(self):
         '''Set screen for current level'''
@@ -472,7 +515,7 @@ class Level(object):
         self.shadow = []
     
     def check_place(self, pos):
-        '''Check whether the figure can be placed in current position.
+        '''Check whether the figure can be placed in current mouse position.
            If not, update shadow and darken appropriate cells of the 
            current figure.'''
         row, col = self.get_row_col(pos)
@@ -494,6 +537,55 @@ class Level(object):
 
         coords_checked = all(check_results)
         return coords_checked       
+    
+    def global_check_place(self):
+        '''Check if there is enough free space on the grid for current figure.
+           If not, user lost this game.'''
+
+        # Store all possible rotations of the figure in a list
+        rotations = [self.figure]
+        for i in range(3):
+            rotations.append(zip(*rotations[i][::-1]))
+
+        break_loops = False
+        
+        # We look for a place for any rotation of the figure
+        for figure in rotations:
+            # These two loops iterate through the grid
+            for g_rnum, gc_row in enumerate(self.grid):
+                for g_cnum, g_cell in enumerate(gc_row):
+                    
+                    check_results = []
+                    
+                    # These two loops iterate through current figure, cell by cell.
+                    # Results are stored in check_results.
+                    for rnum, c_row in enumerate(figure):
+                        for cnum, cell in enumerate(c_row):
+                            if not cell: continue       # No need to check an empty cell
+                            try:
+                                if self.grid[g_rnum + rnum][g_cnum + cnum] == "0":
+                                    check_results.append(True)
+                                else:
+                                    check_results.append(False)
+                            except IndexError:
+                                check_results.append(False)
+                    
+                    # Check if all cells of current figure can be placed in current position of the grid.
+                    # If yes, no need to check any other rotation or positions, so we break all loops.
+                    can_place = all(check_results)
+                    
+                    if can_place:
+                        break_loops = True
+                        break
+                        
+                if break_loops:
+                    break
+            if break_loops:
+                break
+                
+        # If we did not break at some point then no place was found for current figure => the game is lost
+        else:
+            self.defeat = True
     
     def update_screen(self):
         '''Update the grid, the figure image and its shadow.
@@ -537,6 +629,9 @@ class Level(object):
         self.figure = self.next_figure
         self.create_figure_img()
         self.next_figure = self.get_next_figure()
+        
+        # Check if the new figure can be placed anywhere
+        self.global_check_place()
         
         # Update visuals
         self.show_next()
