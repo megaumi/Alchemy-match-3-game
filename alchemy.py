@@ -60,7 +60,7 @@ def img_load(dir, file):
 
 class Game(object):
     def __init__(self):
-        '''Initialize game, load resources and show the main menu'''        
+        '''Initialize the game, load resources and show the main menu'''        
         pygame.init()
         
         # Create the game window, set icon and window title
@@ -104,19 +104,22 @@ class Game(object):
         for level in LEVELS:
             self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,255,255))
 
-        # ./settings_init file contains initial game settings
-        # ./settings is the file that we actually work with
-        # If ./settings does not exist, we create it from ./settings_init
+        # ./settings_init file contains initial game settings.
+        # ./settings is the file that we actually work with.
+        # If ./settings does not exist, we create it from ./settings_init.
         if not os.path.exists("settings"): shutil.copyfile("settings_init", "settings")
 
     def main_menu(self):
-        '''Show the main game menu:
+        '''Load game settings from file.
+           If there are no user profiles, ask user to create one.
+           Load user progress from file.
+           Show the main game menu:
                 Continue Quest
                 New Quest
                 Options         - not implemented yet
                 High Scores     - not implemented yet
                 Exit            - not implemented yet
-           User can select or create a new profile here as well.'''
+           User can select another profile here as well (not implemented yet).'''
         
         # Show the background image and the "Alchemy" logo with the shadow
         self.screen.blit(self.images["menu_bg"], (0,0))        
@@ -128,7 +131,7 @@ class Game(object):
         self.screen.blit(title_l, (345, 190))
         
         # Load main game settings from file
-        # Example settings: {"Sound": 0, "Music": 0, "user": "umi"}
+        # Example settings: {"sound": 3, "music": 3, "user": "umi"}
         settings_file = open("settings", "r")
         self.settings = json.loads(settings_file.read())
         settings_file.close()
@@ -143,16 +146,16 @@ class Game(object):
         self.username = self.settings["user"]
         
         # Load user progress file
-        # Example: {"Score": 700, "locked": [4]}
+        # Example: {"score": 700, "locked": [4]}
         user_file = open("%s_progress" %self.username, "r")
         self.user = json.loads(user_file.read())
         user_file.close()
         
-        # Construct the main menu: background and some labels
+        # Construct the main menu: show the menu bg image and some labels
         self.screen.blit(self.images["msg"], (360,340))        
         new_quest_b = self.big_font.render("New Quest", 1, (255,255,255))
         new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 410))
-        # If we just created a user profile, "Continue quest" should look (and be) disabled
+        # If we just created a user profile, "Continue Quest" should look (and be) disabled
         if new_user:
             continue_quest_b = self.big_font.render("Continue Quest", 1, (50,50,50))
         else:
@@ -163,7 +166,7 @@ class Game(object):
         
         pygame.display.update()
         
-        # User can either select any menu item or quit
+        # Wait for user input
         while True:
             self.clock.tick(60)
             event = pygame.event.poll()
@@ -174,13 +177,17 @@ class Game(object):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     sys.exit()
+            # User can select any menu item
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if new_quest_b_rect.collidepoint(event.pos):
-                    self.user = {"Score": 0, "locked": [2,3,4]}
+                    # User selected "New Quest": reinitialize the user progress file
+                    self.user = {"score": 0, "locked": [2,3,4]}
                     user_file = open("%s_progress" %self.username, "w")
                     user_file.write(json.dumps(self.user))
                     user_file.close()
+                    # Load game
                     self.game_screen()
+                # New users cannot select "Continue Quest"
                 if continue_quest_b_rect.collidepoint(event.pos) and not new_user:
                     self.game_screen()
 
@@ -234,7 +241,7 @@ class Game(object):
                     
     def game_screen(self):
         '''Show the main in-game screen. User can select a level from 
-           a list of unlocked levels here.'''
+           the list of unlocked levels here.'''
         
         level_image_rects = {}
         self.screen.blit(self.images["menu_bg"], (0,0))
@@ -247,8 +254,12 @@ class Game(object):
         self.screen.blit(title_l, (345, 190))
         
         self.screen.blit(self.images["level_menu"], (360,340))
-
+        
+        self.score = self.user["score"]
         self.locked_levels = self.user["locked"]
+        
+        score_l = self.smaller_font.render("Score: %i" % self.score, 1, (255,255,255))
+        self.screen.blit(score_l, (20, 760))
 
         for i in LEVELS:
             image = self.images['level_%i' %i]
@@ -271,13 +282,15 @@ class Game(object):
                 for i in LEVELS:
                     if level_image_rects[i].collidepoint(event.pos):
                         if not i in self.locked_levels:
-                            level = Level(self.screen, self.images, self.big_font, self.smaller_font, "level_%i" %i)
-                            won = level.run()
-                            if won and (i+1 in self.locked_levels):
-                                self.locked_levels.remove(i+1)
-                                self.images['level_%i' %(i+1)].fill((255, 255, 255), None, pygame.BLEND_ADD)
-                                self.user["locked"] = self.locked_levels
+                            level = Level(self.screen, self.images, self.big_font, self.smaller_font, self.score, "level_%i" %i)
+                            won, self.score = level.run()
+                            if won:
+                                self.user["score"] = self.score
                                 user_file = open("%s_progress" %self.username, "w")
+                                if i+1 in self.locked_levels:
+                                    self.locked_levels.remove(i+1)
+                                    self.images['level_%i' %(i+1)].fill((255, 255, 255), None, pygame.BLEND_ADD)
+                                    self.user["locked"] = self.locked_levels
                                 user_file.write(json.dumps(self.user))
                                 user_file.close()
                             self.game_screen()    
@@ -285,11 +298,11 @@ class Game(object):
 
 
 class Level(object):
-    def __init__(self, screen, images, big_font, smaller_font, level_id):
+    def __init__(self, screen, images, big_font, smaller_font, score, level_id):
         '''Load a level from a text file and run it'''
         self.screen = screen
         self.level_id = level_id
-        level_file = open(os.path.join("levels", "level_5"), "r")
+        level_file = open(os.path.join("levels", level_id), "r")
         level = json.loads(level_file.read())
         
         self.grid_size = 15
@@ -300,6 +313,8 @@ class Level(object):
         self.locked = level["locked"]
         
         self.goal = level["goal"]
+        self.init_score = self.score = score        
+        self.bonus = 0
         
         self.images = images
         
@@ -347,7 +362,7 @@ class Level(object):
                     if not self.mouse_visible:
                         pygame.mouse.set_visible(True)
                         self.mouse_visible = True
-                    return
+                    return False, self.init_score
                 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                 if self.grid_area_rect.collidepoint(event.pos):
@@ -386,11 +401,11 @@ class Level(object):
             
             if self.victory:
                 self.on_victory()
-                return True
+                return True, self.score
                 
             if self.defeat:
                 self.on_defeat()
-                return False
+                return False, self.init_score
     
     def on_victory(self):
         '''Show a "Well done!" message to the user'''
@@ -523,6 +538,14 @@ class Level(object):
         goal_label = self.big_font.render("Metals to transmute:", 1, (255, 255, 255))
         self.screen.blit(goal_label, (20, 170))
         self.show_goal()
+        
+        score_l = self.smaller_font.render("Score: %i" % self.score, 1, (255,255,255))
+        self.screen.blit(score_l, (20, 760))
+        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, (255,255,255))
+        self.screen.blit(bonus_l, (900, 760))
+        self.update_rects.append((20, 760, 120, 25))
+        self.update_rects.append((900, 760, 120, 25))
+                
         init_mouse = pygame.mouse.get_pos()
         
         if self.grid_area_rect.collidepoint(init_mouse):
@@ -692,6 +715,15 @@ class Level(object):
             self.screen.blit(label, (20, 205 + i*25))
             rect = (20, 205 + i*25, 120, 25)
             if rect not in self.update_rects: self.update_rects.append(rect)
+        
+        score_l = self.smaller_font.render("Score: %i" % self.score, 1, (255,255,255))
+        self.screen.blit(self.images["bg_image"], (20, 760), (20, 760, 120, 25))
+        self.screen.blit(score_l, (20, 760))
+        
+        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, (255,255,255))
+        self.screen.blit(self.images["bg_image"], (900, 760), (900, 760, 120, 25))
+        self.screen.blit(bonus_l, (900, 760))
+        
     
     def show_next(self):
         '''Update screen in the next figure area'''
@@ -720,7 +752,7 @@ class Level(object):
         def check_direction(row, col, dir, cell, counter, to_del_coords):
             '''Check the next cell in given direction. If it has the same color as the current cell,
             store its coords (to delete it later) and pass it to this function recursively
-            with incremented counter'''
+            with an incremented counter'''
             
             n_row = row + dir[0]
             n_col = col + dir[1]            
@@ -764,6 +796,10 @@ class Level(object):
             for d_row, d_col in to_del_coords: 
                 self.grid[d_row][d_col] = "0"
                 self.timer_grid[d_row][d_col] = 0
+            print "Element: %s" % element
+            self.score += 50 * counter
+            self.bonus += counter - 2
+            print self.score, self.bonus
 
         # Check adjacent cells in horizontal direction (left, then right)
         counter = 0
@@ -783,7 +819,11 @@ class Level(object):
             for d_row, d_col in to_del_coords:
                 self.grid[d_row][d_col] = "0"         
                 self.timer_grid[d_row][d_col] = 0
-        
+            print "Element: %s" % element
+            self.score += 50 * counter
+            self.bonus += counter - 2
+            print self.score, self.bonus
+                                
         # If there was a match, destroy the cell itself
         if match_found: 
             self.grid[row][col] = "0"
