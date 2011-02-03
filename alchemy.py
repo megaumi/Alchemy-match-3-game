@@ -60,19 +60,66 @@ def img_load(dir, file):
 
 class Game(object):
     def __init__(self):
+        '''Initialize game, load resources and show the main menu'''        
         pygame.init()
+        
+        # Create the game window, set icon and window title
         pygame.display.set_icon(pygame.image.load(os.path.join("images","icon.png")))
         self.screen = pygame.display.set_mode(SCREEN_SIZE, 0, 32)
         pygame.display.set_caption("Alchemy")
         
+        # Clock will be used for polling events
         self.clock = pygame.time.Clock()
         
         self.load_resources()
         self.main_menu()
-    
-    def main_menu(self):
-        self.screen.blit(self.images["menu_bg"], (0,0))
+
+    def load_resources(self):
+        '''Load images, fonts, sounds, etc'''
+        self.images = {}
         
+        # In-game images
+        self.images['grid'] = img_load("images", "grid.jpg")
+        self.images['shadow'] = img_load("images", "shadow.png")
+        self.images['border'] = img_load("images", "border.png")
+        self.images['grid_border'] = img_load("images", "grid_border.png")
+        
+        # In-game element images
+        for element in ELEMENTS.values():
+            self.images[element] = img_load("images", element + ".png")
+                    
+        # GUI images
+        self.images['menu_bg'] = img_load("images", "menu_bg.png")
+        self.images['msg'] = img_load("images", "msg.png")
+        self.images['level_menu'] = img_load("images", "level_menu.png")
+        self.images['new_user'] = img_load("images", "new_user.png")
+        self.images['ok'] = img_load("images", "ok.png")
+        
+        # Fonts
+        self.big_font = pygame.font.Font("fonts/eufm10.ttf", 26)
+        self.smaller_font = pygame.font.Font("fonts/eufm10.ttf", 22)
+        self.biggest_font = pygame.font.Font("fonts/eufm10.ttf", 106)
+        
+        # Level labels used in self.game_screen()
+        for level in LEVELS:
+            self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,255,255))
+
+        # ./settings_init file contains initial game settings
+        # ./settings is the file that we actually work with
+        # If ./settings does not exist, we create it from ./settings_init
+        if not os.path.exists("settings"): shutil.copyfile("settings_init", "settings")
+
+    def main_menu(self):
+        '''Show the main game menu:
+                Continue Quest
+                New Quest
+                Options         - not implemented yet
+                High Scores     - not implemented yet
+                Exit            - not implemented yet
+           User can select or create a new profile here as well.'''
+        
+        # Show the background image and the "Alchemy" logo with the shadow
+        self.screen.blit(self.images["menu_bg"], (0,0))        
         logo_l = self.biggest_font.render("Alchemy", 1, (255,255,255))
         logo_ls = self.biggest_font.render("Alchemy", 1, (70,70,70))
         title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, (255,255,255))
@@ -80,83 +127,43 @@ class Game(object):
         self.screen.blit(logo_l, (320, 90))
         self.screen.blit(title_l, (345, 190))
         
+        # Load main game settings from file
+        # Example settings: {"Sound": 0, "Music": 0, "user": "umi"}
         settings_file = open("settings", "r")
         self.settings = json.loads(settings_file.read())
         settings_file.close()
         
         new_user = False
         
+        # If there are no user profiles, create one
         if self.settings["user"] == "None":
-            self.screen.blit(self.images["new_user"], (360,340))
-            self.screen.blit(self.images["ok"], (600,390))
-            pygame.display.update()
-            chars = ""
-            widths = []
-            while True:
-                self.clock.tick(60)
-                event = pygame.event.poll()
-                pygame.event.clear()
-                
-                if event.type == pygame.QUIT:
-                    sys.exit()
-                if event.type == pygame.KEYDOWN:
-                    if 123 > event.key > 96:
-                        if sum(widths) < 193:
-                            char = chr(event.key) if chars else chr(event.key).upper()
-                            chars += char
-                            char_img = self.smaller_font.render(char, 1, (255,255,255))
-                            self.screen.blit(char_img, (393 + sum(widths), 397))
-                            pygame.display.update((393 + sum(widths),397, 32, 32))
-                            widths.append(char_img.get_width()+1)
-                        
-                    if event.key == pygame.K_BACKSPACE and chars:
-                        chars = chars[:-1]
-                        widths.pop(len(chars))                        
-                        self.screen.blit(self.images["new_user"], (393 + sum(widths), 397), (33 + sum(widths), 57, 22, 32))
-                        pygame.display.update((393 + sum(widths), 397, 22, 32))
-
-                    if event.key == pygame.K_ESCAPE:
-                        sys.exit()
-
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if (self.images["ok"].get_rect(topleft = (600, 390)).collidepoint(event.pos)
-                        and chars):
-                        username = chars.lower()
-                        
-                        settings_file = open("settings", "w")
-                        self.settings["user"] = username
-                        settings_file.write(json.dumps(self.settings))
-                        settings_file.close()
-                        
-                        user_file = os.open("%s_progress" %username, os.O_CREAT|os.O_WRONLY)
-                        os.write(user_file, json.dumps({"Score": 0, "locked": [2,3,4]}))
-                        os.close(user_file)
-                        
-                        new_user = True
-                        
-                        break
+            self.create_new_user()
+            new_user = True
         
         self.username = self.settings["user"]
         
+        # Load user progress file
+        # Example: {"Score": 700, "locked": [4]}
         user_file = open("%s_progress" %self.username, "r")
         self.user = json.loads(user_file.read())
         user_file.close()
         
-        self.screen.blit(self.images["menu"], (360,340))
-        
+        # Construct the main menu: background and some labels
+        self.screen.blit(self.images["msg"], (360,340))        
         new_quest_b = self.big_font.render("New Quest", 1, (255,255,255))
         new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 410))
+        # If we just created a user profile, "Continue quest" should look (and be) disabled
         if new_user:
             continue_quest_b = self.big_font.render("Continue Quest", 1, (50,50,50))
         else:
             continue_quest_b = self.big_font.render("Continue Quest", 1, (255,255,255))
-        continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 360))
-        
+        continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 360))        
         self.screen.blit(new_quest_b, new_quest_b_rect)
         self.screen.blit(continue_quest_b, continue_quest_b_rect)
         
         pygame.display.update()
         
+        # User can either select any menu item or quit
         while True:
             self.clock.tick(60)
             event = pygame.event.poll()
@@ -176,7 +183,55 @@ class Game(object):
                     self.game_screen()
                 if continue_quest_b_rect.collidepoint(event.pos) and not new_user:
                     self.game_screen()
-    
+
+    def create_new_user(self):
+        self.screen.blit(self.images["new_user"], (360,340))
+        self.screen.blit(self.images["ok"], (600,390))
+        pygame.display.update()
+        chars = ""
+        widths = []
+        while True:
+            self.clock.tick(60)
+            event = pygame.event.poll()
+            pygame.event.clear()
+            
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if 123 > event.key > 96:
+                    if sum(widths) < 193:
+                        char = chr(event.key) if chars else chr(event.key).upper()
+                        chars += char
+                        char_img = self.smaller_font.render(char, 1, (255,255,255))
+                        self.screen.blit(char_img, (393 + sum(widths), 397))
+                        pygame.display.update((393 + sum(widths),397, 32, 32))
+                        widths.append(char_img.get_width()+1)
+                    
+                if event.key == pygame.K_BACKSPACE and chars:
+                    chars = chars[:-1]
+                    widths.pop(len(chars))                        
+                    self.screen.blit(self.images["new_user"], (393 + sum(widths), 397), (33 + sum(widths), 57, 22, 32))
+                    pygame.display.update((393 + sum(widths), 397, 22, 32))
+
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if (self.images["ok"].get_rect(topleft = (600, 390)).collidepoint(event.pos)
+                    and chars):
+                    username = chars.lower()
+                    
+                    settings_file = open("settings", "w")
+                    self.settings["user"] = username
+                    settings_file.write(json.dumps(self.settings))
+                    settings_file.close()
+                    
+                    user_file = os.open("%s_progress" %username, os.O_CREAT|os.O_WRONLY)
+                    os.write(user_file, json.dumps({"Score": 0, "locked": [2,3,4]}))
+                    os.close(user_file)
+                                        
+                    return
+                    
     def game_screen(self):
         '''Show the main in-game screen. User can select a level from 
            a list of unlocked levels here.'''
@@ -227,31 +282,6 @@ class Game(object):
                                 user_file.close()
                             self.game_screen()    
             pygame.display.update()
-    
-    def load_resources(self):
-        '''Load images, fonts, sounds, etc'''
-        self.images = {}
-        self.images['grid'] = img_load("images", "grid.jpg")
-        self.images['shadow'] = img_load("images", "shadow.png")
-        self.images['border'] = img_load("images", "border.png")
-        self.images['grid_border'] = img_load("images", "grid_border.png")
-        for element in ELEMENTS.values():
-            self.images[element] = img_load("images", element + ".png")
-        
-        self.biggest_font = pygame.font.Font("fonts/eufm10.ttf", 106)
-        self.big_font = pygame.font.Font("fonts/eufm10.ttf", 26)
-        self.smaller_font = pygame.font.Font("fonts/eufm10.ttf", 22)
-        
-        for level in LEVELS:
-            self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,255,255))
-            
-        self.images['menu_bg'] = img_load("images", "menu_bg.png")
-        self.images['menu'] = img_load("images", "menu.png")
-        self.images['level_menu'] = img_load("images", "level_menu.png")
-        self.images['new_user'] = img_load("images", "new_user.png")
-        self.images['ok'] = img_load("images", "ok.png")
-        
-        if not os.path.exists("settings"): shutil.copyfile("settings_init", "settings")
 
 
 class Level(object):
@@ -376,7 +406,7 @@ class Level(object):
         self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
         
         # Show the message window and the "Well done!" label
-        self.screen.blit(self.images["menu"], (360, 340))
+        self.screen.blit(self.images["msg"], (360, 340))
         win_label = self.big_font.render("Well done!", 1, (255, 255, 255))
         self.screen.blit(win_label, (445, 380))
         
@@ -451,7 +481,7 @@ class Level(object):
         self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
         
         # Show the message window and the "Try again!" label
-        self.screen.blit(self.images["menu"], (360, 340))
+        self.screen.blit(self.images["msg"], (360, 340))
         win_label = self.big_font.render("Try again!", 1, (255, 255, 255))
         self.screen.blit(win_label, (445, 380))
         
