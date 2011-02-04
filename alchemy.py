@@ -50,7 +50,7 @@ ELEMENTS = {
     "o": "old"
     }
 
-LEVELS = (1, 2, 3, 4)
+LEVELS = (1, 2, 3, 4, 5)
 
 
 def img_load(dir, file):
@@ -142,8 +142,8 @@ class Game(object):
         if self.settings["user"] == "None":
             self.create_new_user()
             new_user = True
-        
-        self.username = self.settings["user"]
+        else:
+            self.username = self.settings["user"]
         
         # Load user progress file
         # Example: {"score": 700, "locked": [4]}
@@ -181,10 +181,15 @@ class Game(object):
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if new_quest_b_rect.collidepoint(event.pos):
                     # User selected "New Quest": reinitialize the user progress file
-                    self.user = {"score": 0, "locked": [2,3,4]}
-                    user_file = open("%s_progress" %self.username, "w")
-                    user_file.write(json.dumps(self.user))
+                    shutil.copyfile("progress_init", "%s_progress" %self.username)
+                    user_file = open("%s_progress" %self.username, "r")
+                    self.user = json.loads(user_file.read())
                     user_file.close()
+                    # Set a new username in the game settings file
+                    settings_file = open("settings", "w")
+                    self.settings["user"] = self.username
+                    settings_file.write(json.dumps(self.settings))
+                    settings_file.close()
                     # Load game
                     self.game_screen()
                 # New users cannot select "Continue Quest"
@@ -228,14 +233,10 @@ class Game(object):
                     and chars):
                     username = chars.lower()
                     
-                    settings_file = open("settings", "w")
-                    self.settings["user"] = username
-                    settings_file.write(json.dumps(self.settings))
-                    settings_file.close()
+                    self.username = username
+
                     
-                    user_file = os.open("%s_progress" %username, os.O_CREAT|os.O_WRONLY)
-                    os.write(user_file, json.dumps({"Score": 0, "locked": [2,3,4]}))
-                    os.close(user_file)
+                    shutil.copyfile("progress_init", "%s_progress" %username)
                                         
                     return
                     
@@ -348,6 +349,7 @@ class Level(object):
         self.create_figure_img()
         coords_checked = self.check_place(self.mouse_pos)
         self.update_screen()
+
         
         while True:
             
@@ -398,7 +400,8 @@ class Level(object):
                         mouse_visible = True
 
             self.age_metal()
-            
+
+                
             if self.victory:
                 self.on_victory()
                 return True, self.score
@@ -406,7 +409,8 @@ class Level(object):
             if self.defeat:
                 self.on_defeat()
                 return False, self.init_score
-    
+
+        
     def on_victory(self):
         '''Show a "Well done!" message to the user'''
         
@@ -545,7 +549,7 @@ class Level(object):
         self.screen.blit(bonus_l, (900, 760))
         self.update_rects.append((20, 760, 120, 25))
         self.update_rects.append((900, 760, 120, 25))
-                
+     
         init_mouse = pygame.mouse.get_pos()
         
         if self.grid_area_rect.collidepoint(init_mouse):
@@ -797,7 +801,7 @@ class Level(object):
                 self.grid[d_row][d_col] = "0"
                 self.timer_grid[d_row][d_col] = 0
             print "Element: %s" % element
-            self.score += 50 * counter
+            self.score += 5 * counter
             self.bonus += counter - 2
             print self.score, self.bonus
 
@@ -820,7 +824,7 @@ class Level(object):
                 self.grid[d_row][d_col] = "0"         
                 self.timer_grid[d_row][d_col] = 0
             print "Element: %s" % element
-            self.score += 50 * counter
+            self.score += 5 * counter
             self.bonus += counter - 2
             print self.score, self.bonus
                                 
