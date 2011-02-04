@@ -110,16 +110,18 @@ class Game(object):
         if not os.path.exists("settings"): shutil.copyfile("settings_init", "settings")
 
     def main_menu(self):
-        '''Load game settings from file.
-           If there are no user profiles, ask user to create one.
-           Load user progress from file.
-           Show the main game menu:
-                Continue Quest
-                New Quest
-                Options         - not implemented yet
-                High Scores     - not implemented yet
-                Exit            - not implemented yet
-           User can select another profile here as well (not implemented yet).'''
+        '''
+        Load game settings from file.
+        If there are no user profiles, ask user to create one.
+        Load user progress from file.
+        Show the main game menu:
+             Continue Quest
+             New Quest
+             Options         - not implemented yet
+             High Scores     - not implemented yet
+             Exit            - not implemented yet
+        User can select another profile here as well (not implemented yet).
+        '''
         
         # Show the background image and the "Alchemy" logo with the shadow
         self.screen.blit(self.images["menu_bg"], (0,0))        
@@ -140,7 +142,7 @@ class Game(object):
         
         # If there are no user profiles, create one
         if self.settings["user"] == "None":
-            self.create_new_user()
+            self.username = self.create_new_user()
             new_user = True
         else:
             self.username = self.settings["user"]
@@ -185,7 +187,7 @@ class Game(object):
                     user_file = open("%s_progress" %self.username, "r")
                     self.user = json.loads(user_file.read())
                     user_file.close()
-                    # Set a new username in the game settings file
+                    # Set the new username in the game settings file
                     settings_file = open("settings", "w")
                     self.settings["user"] = self.username
                     settings_file.write(json.dumps(self.settings))
@@ -197,52 +199,71 @@ class Game(object):
                     self.game_screen()
 
     def create_new_user(self):
+        '''
+        Show a "New user" dialog.
+        User can input only latin characters and Backspace.
+        Returns the new username.
+        '''
+        # Construct the dialog: bg image and OK button
         self.screen.blit(self.images["new_user"], (360,340))
         self.screen.blit(self.images["ok"], (600,390))
         pygame.display.update()
+        
+        # "chars" will hold the characters
         chars = ""
+        # "widths" will hold widths of those characters
+        # It will help us place and erase characters nicely
         widths = []
+        
+        # Wait for user input
         while True:
             self.clock.tick(60)
             event = pygame.event.poll()
             pygame.event.clear()
             
+            # User can quit the game
             if event.type == pygame.QUIT:
                 sys.exit()
             if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+                    
+                # User can input any latin characters, but we accept new
+                # characters only if there is enough space for them.
                 if 123 > event.key > 96:
                     if sum(widths) < 193:
+                        # Force capitalization (Umi, not UMI or uMi, etc)
                         char = chr(event.key) if chars else chr(event.key).upper()
                         chars += char
+                        # Create an image for the new char and show it on the screen
                         char_img = self.smaller_font.render(char, 1, (255,255,255))
                         self.screen.blit(char_img, (393 + sum(widths), 397))
                         pygame.display.update((393 + sum(widths),397, 32, 32))
+                        # Calculate the width of the new image and add store it
                         widths.append(char_img.get_width()+1)
-                    
+                        
+                # User can erase characters: we delete the character and its width
+                # and draw the bg image where the character used to be
                 if event.key == pygame.K_BACKSPACE and chars:
                     chars = chars[:-1]
-                    widths.pop(len(chars))                        
+                    widths.pop(len(chars))
                     self.screen.blit(self.images["new_user"], (393 + sum(widths), 397), (33 + sum(widths), 57, 22, 32))
                     pygame.display.update((393 + sum(widths), 397, 22, 32))
-
-                if event.key == pygame.K_ESCAPE:
-                    sys.exit()
-
+                    
+            # After user has entered his username he can click "OK"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if (self.images["ok"].get_rect(topleft = (600, 390)).collidepoint(event.pos)
                     and chars):
                     username = chars.lower()
-                    
-                    self.username = username
-
-                    
+                    # Initialize user progress file
                     shutil.copyfile("progress_init", "%s_progress" %username)
-                                        
-                    return
+                    return username
                     
     def game_screen(self):
-        '''Show the main in-game screen. User can select a level from 
-           the list of unlocked levels here.'''
+        '''
+        Show the main in-game screen. User can select a level from 
+        the list of unlocked levels here.
+        '''
         
         level_image_rects = {}
         self.screen.blit(self.images["menu_bg"], (0,0))
@@ -253,6 +274,10 @@ class Game(object):
         self.screen.blit(logo_ls, (324, 93))
         self.screen.blit(logo_l, (320, 90))
         self.screen.blit(title_l, (345, 190))
+        
+        welcome_l = self.big_font.render("Welcome, Magister %s!" %self.username.capitalize(), 1, (255,255,255))
+        self.screen.blit(welcome_l, (365, 320))
+        
         
         self.screen.blit(self.images["level_menu"], (360,340))
         
@@ -349,7 +374,6 @@ class Level(object):
         self.create_figure_img()
         coords_checked = self.check_place(self.mouse_pos)
         self.update_screen()
-
         
         while True:
             
@@ -400,7 +424,6 @@ class Level(object):
                         mouse_visible = True
 
             self.age_metal()
-
                 
             if self.victory:
                 self.on_victory()
@@ -447,9 +470,11 @@ class Level(object):
                 return
                     
     def get_next_figure(self):
-        '''Generate a new figure.
-           This function is called from self.run() to generate 2 initial figures
-           and then from self.place_figure() every time we need a new figure.'''
+        '''
+        Generate a new figure.
+        This function is called from self.run() to generate 2 initial figures
+        and then from self.place_figure() every time we need a new figure.
+        '''
         
         # Based on size of the figure and number of rows get number of cols and empty cells.
         # FIXME: Sometimes this algorithm generates wrong polyominoes (with non-adjacent cells)
@@ -560,8 +585,10 @@ class Level(object):
         pygame.display.update()
        
     def create_figure_img(self):
-        '''Create a dict containing images for every cell of the figure and their
-           coordinates in order to blit all cell images when updating screen.'''
+        '''
+        Create a dict containing images for every cell of the figure and their
+        coordinates in order to blit all cell images when updating screen.
+        '''
         self.figure_image = {}
         for rnum, c_row in enumerate(self.figure):
             for cnum, cell in enumerate(c_row):
@@ -572,9 +599,11 @@ class Level(object):
         self.shadow = []
     
     def check_place(self, pos):
-        '''Check whether the figure can be placed in current mouse position.
-           If not, update shadow and darken appropriate cells of the 
-           current figure.'''
+        '''
+        Check whether the figure can be placed in current mouse position.
+        If not, update shadow and darken appropriate cells of the 
+        current figure.
+        '''
         row, col = self.get_row_col(pos)
         
         check_results = []
@@ -596,8 +625,10 @@ class Level(object):
         return coords_checked       
     
     def global_check_place(self):
-        '''Check if there is enough free space on the grid for current figure.
-           If not, user lost this game.'''
+        '''
+        Check if there is enough free space on the grid for current figure.
+        If not, user lost this game.
+        '''
 
         # Store all possible rotations of the figure in a list
         rotations = [self.figure]
@@ -635,11 +666,13 @@ class Level(object):
         self.defeat = True
     
     def update_screen(self):
-        '''Update the grid, the figure image and its shadow.
-           This function is called every time the user moves or left-clicks
-           his mouse or rotates the figure.
-           It is also called before the game loop (right after the screen
-           has been set), and from self.age_metal().'''
+        '''
+        Update the grid, the figure image and its shadow.
+        This function is called every time the user moves or left-clicks
+        his mouse or rotates the figure.
+        It is also called before the game loop (right after the screen
+        has been set), and from self.age_metal().
+        '''
         # Update the grid area
         self.show_grid()
 
@@ -655,8 +688,10 @@ class Level(object):
         pygame.display.update(self.update_rects)
 
     def place_figure(self, pos):
-        '''Add new values to the grid, handle matches for new values, generate
-           the next figure and show it in the next_area'''
+        '''
+        Add new values to the grid, handle matches for new values, generate
+        the next figure and show it in the next_area
+        '''
         row, col = self.get_row_col(pos)
         
         # Update grid values
@@ -684,8 +719,10 @@ class Level(object):
         self.show_next()
     
     def age_metal(self):
-        '''Check if one or more pieces of metal aged. 
-           If yes, update the timers and the screen.'''
+        '''
+        Check if one or more pieces of metal aged. 
+        If yes, update the timers and the screen.
+        '''
         changed = False
         now = pygame.time.get_ticks()/1000
         for rnum, row in enumerate(self.timer_grid):
@@ -753,11 +790,12 @@ class Level(object):
     def handle_matches(self, row, col, cell):
         '''Find all matches with the current cell and destroy all matching cells'''
         
-        def check_direction(row, col, dir, cell, counter, to_del_coords):
-            '''Check the next cell in given direction. If it has the same color as the current cell,
+        def check_dir(row, col, dir, cell, counter, d_coords):
+            '''
+            Check the next cell in given direction. If it has the same color as the current cell,
             store its coords (to delete it later) and pass it to this function recursively
-            with an incremented counter'''
-            
+            with an incremented counter
+            '''
             n_row = row + dir[0]
             n_col = col + dir[1]            
             
@@ -766,14 +804,14 @@ class Level(object):
                 # If the last character is "l" (which indicates a locked cell)
                 # then there's no match for sure
                 if self.grid[n_row][n_col][-1] == "l" or cell[-1] == "l":
-                    return counter, to_del_coords
+                    return counter, d_coords
                 # We compare only the first character, so that "1" and "1s"
                 # (which are mercury and spoilt mercury) will make a match
                 if self.grid[n_row][n_col][0] == cell[0]:
-                    to_del_coords.append([n_row, n_col])
+                    d_coords.append([n_row, n_col])
                     counter += 1
-                    counter, to_del_coords = check_direction(n_row, n_col, dir, cell, counter, to_del_coords)
-            return counter, to_del_coords
+                    counter, d_coords = check_dir(n_row, n_col, dir, cell, counter, d_coords)
+            return counter, d_coords
 
         up = -1, 0
         down = 1, 0
@@ -784,10 +822,10 @@ class Level(object):
         
         # Check adjacent cells in vertical direction (up, then down)
         counter = 0
-        to_del_coords = []
+        d_coords = []
        
-        counter, to_del_coords = check_direction(row, col, up, cell, counter, to_del_coords)
-        counter, to_del_coords  = check_direction(row, col, down, cell, counter, to_del_coords)
+        counter, d_coords = check_dir(row, col, up, cell, counter, d_coords)
+        counter, d_coords  = check_dir(row, col, down, cell, counter, d_coords)
 
         if counter >= 2: 
             match_found = True
@@ -797,7 +835,7 @@ class Level(object):
                     self.goal[element] = 0
                 else:
                     self.goal[element] -=1
-            for d_row, d_col in to_del_coords: 
+            for d_row, d_col in d_coords: 
                 self.grid[d_row][d_col] = "0"
                 self.timer_grid[d_row][d_col] = 0
             print "Element: %s" % element
@@ -807,10 +845,10 @@ class Level(object):
 
         # Check adjacent cells in horizontal direction (left, then right)
         counter = 0
-        to_del_coords = []
+        d_coords = []
 
-        counter, to_del_coords = check_direction(row, col, left, cell, counter, to_del_coords)
-        counter, to_del_coords = check_direction(row, col, right, cell, counter, to_del_coords)
+        counter, d_coords = check_dir(row, col, left, cell, counter, d_coords)
+        counter, d_coords = check_dir(row, col, right, cell, counter, d_coords)
 
         if counter >= 2:
             element = cell[0]
@@ -820,7 +858,7 @@ class Level(object):
                     self.goal[element] = 0
                 else:
                     self.goal[element] -=1
-            for d_row, d_col in to_del_coords:
+            for d_row, d_col in d_coords:
                 self.grid[d_row][d_col] = "0"         
                 self.timer_grid[d_row][d_col] = 0
             print "Element: %s" % element
