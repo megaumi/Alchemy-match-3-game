@@ -34,6 +34,7 @@ SCREEN_SIZE = 1024, 800
 GRID_OFFSET = (300, 180)
 NEXT_OFFSET = (20, 40)
 
+WHITE = (255, 255, 255)
 ELEMENTS = {
     "1": "mercury",
     "2": "saturn",
@@ -83,6 +84,10 @@ class Game(object):
         self.images['shadow'] = img_load("images", "shadow.png")
         self.images['border'] = img_load("images", "border.png")
         self.images['grid_border'] = img_load("images", "grid_border.png")
+        self.images['sulphur'] = img_load("images", "sulphur.png")
+        self.images['sulphur_b'] = img_load("images", "sulphur_b.png")
+        self.images['sulphur_bd'] = self.images['sulphur_b'].copy()
+        self.images['sulphur_bd'].fill((50, 50, 50), None, pygame.BLEND_SUB)
         
         # In-game element images
         for element in ELEMENTS.values():
@@ -102,7 +107,7 @@ class Game(object):
         
         # Level labels used in self.game_screen()
         for level in LEVELS:
-            self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, (255,255,255))
+            self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, WHITE)
 
         # ./settings_init file contains initial game settings.
         # ./settings is the file that we actually work with.
@@ -125,9 +130,9 @@ class Game(object):
         
         # Show the background image and the "Alchemy" logo with the shadow
         self.screen.blit(self.images["menu_bg"], (0,0))        
-        logo_l = self.biggest_font.render("Alchemy", 1, (255,255,255))
+        logo_l = self.biggest_font.render("Alchemy", 1, WHITE)
         logo_ls = self.biggest_font.render("Alchemy", 1, (70,70,70))
-        title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, (255,255,255))
+        title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, WHITE)
         self.screen.blit(logo_ls, (324, 93))
         self.screen.blit(logo_l, (320, 90))
         self.screen.blit(title_l, (345, 190))
@@ -155,13 +160,13 @@ class Game(object):
         
         # Construct the main menu: show the menu bg image and some labels
         self.screen.blit(self.images["msg"], (360,340))        
-        new_quest_b = self.big_font.render("New Quest", 1, (255,255,255))
+        new_quest_b = self.big_font.render("New Quest", 1, WHITE)
         new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 410))
         # If we just created a user profile, "Continue Quest" should look (and be) disabled
         if new_user:
             continue_quest_b = self.big_font.render("Continue Quest", 1, (50,50,50))
         else:
-            continue_quest_b = self.big_font.render("Continue Quest", 1, (255,255,255))
+            continue_quest_b = self.big_font.render("Continue Quest", 1, WHITE)
         continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 360))        
         self.screen.blit(new_quest_b, new_quest_b_rect)
         self.screen.blit(continue_quest_b, continue_quest_b_rect)
@@ -236,14 +241,14 @@ class Game(object):
                         char = chr(event.key) if chars else chr(event.key).upper()
                         chars += char
                         # Create an image for the new char and show it on the screen
-                        char_img = self.smaller_font.render(char, 1, (255,255,255))
+                        char_img = self.smaller_font.render(char, 1, WHITE)
                         self.screen.blit(char_img, (393 + sum(widths), 397))
                         pygame.display.update((393 + sum(widths),397, 32, 32))
                         # Calculate the width of the new image and add store it
                         widths.append(char_img.get_width()+1)
                         
                 # User can erase characters: we delete the character and its width
-                # and draw the bg image where the character used to be
+                # and draw the bg image part over the character image
                 if event.key == pygame.K_BACKSPACE and chars:
                     chars = chars[:-1]
                     widths.pop(len(chars))
@@ -268,23 +273,22 @@ class Game(object):
         level_image_rects = {}
         self.screen.blit(self.images["menu_bg"], (0,0))
         
-        logo_l = self.biggest_font.render("Alchemy", 1, (255,255,255))
+        logo_l = self.biggest_font.render("Alchemy", 1, WHITE)
         logo_ls = self.biggest_font.render("Alchemy", 1, (70,70,70))
-        title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, (255,255,255))
+        title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, WHITE)
         self.screen.blit(logo_ls, (324, 93))
         self.screen.blit(logo_l, (320, 90))
         self.screen.blit(title_l, (345, 190))
         
-        welcome_l = self.big_font.render("Welcome, Magister %s!" %self.username.capitalize(), 1, (255,255,255))
+        welcome_l = self.big_font.render("Welcome, Magister %s!" %self.username.capitalize(), 1, WHITE)
         self.screen.blit(welcome_l, (365, 320))
-        
         
         self.screen.blit(self.images["level_menu"], (360,340))
         
         self.score = self.user["score"]
         self.locked_levels = self.user["locked"]
         
-        score_l = self.smaller_font.render("Score: %i" % self.score, 1, (255,255,255))
+        score_l = self.smaller_font.render("Score: %i" % self.score, 1, WHITE)
         self.screen.blit(score_l, (20, 760))
 
         for i in LEVELS:
@@ -308,14 +312,14 @@ class Game(object):
                 for i in LEVELS:
                     if level_image_rects[i].collidepoint(event.pos):
                         if not i in self.locked_levels:
-                            level = Level(self.screen, self.images, self.big_font, self.smaller_font, self.score, "level_%i" %i)
+                            level = Level(self, "level_%i" %i)
                             won, self.score = level.run()
                             if won:
                                 self.user["score"] = self.score
                                 user_file = open("%s_progress" %self.username, "w")
                                 if i+1 in self.locked_levels:
                                     self.locked_levels.remove(i+1)
-                                    self.images['level_%i' %(i+1)].fill((255, 255, 255), None, pygame.BLEND_ADD)
+                                    self.images['level_%i' %(i+1)].fill(WHITE, None, pygame.BLEND_ADD)
                                     self.user["locked"] = self.locked_levels
                                 user_file.write(json.dumps(self.user))
                                 user_file.close()
@@ -324,9 +328,10 @@ class Game(object):
 
 
 class Level(object):
-    def __init__(self, screen, images, big_font, smaller_font, score, level_id):
+    def __init__(self, game, level_id):
         '''Load a level from a text file and run it'''
-        self.screen = screen
+        self.game = game
+        self.screen = self.game.screen
         self.level_id = level_id
         level_file = open(os.path.join("levels", level_id), "r")
         level = json.loads(level_file.read())
@@ -339,15 +344,27 @@ class Level(object):
         self.locked = level["locked"]
         
         self.goal = level["goal"]
-        self.init_score = self.score = score        
+        self.init_score = self.score = self.game.score        
         self.bonus = 0
         
-        self.images = images
+        self.substances = self.game.user["substances"]
+        self.costs = {"sulphur": 1, "mercury": 15, "salt": 20}
+        
+        # When user reaches some special levels, he automatically researches
+        # new substances. Each substance can be researched only once.
+        if "research" in level:
+            if level["research"] not in self.substances:
+                self.substances.append(level["research"])
+                user_file = open("%s_progress" %self.game.username, "w")
+                user_file.write(json.dumps(self.game.user))
+                user_file.close()                
+        
+        self.images = self.game.images
         
         self.images["bg_image"] = img_load("images", level["bg_image"])
         
-        self.big_font = big_font
-        self.smaller_font = smaller_font
+        self.big_font = self.game.big_font
+        self.smaller_font = self.game.smaller_font
         
         self.clock = pygame.time.Clock()
         
@@ -370,6 +387,8 @@ class Level(object):
         self.next_figure = self.get_next_figure()
         self.global_check_place()
         
+        self.active_subst = ""
+        
         self.set_screen()
         self.create_figure_img()
         coords_checked = self.check_place(self.mouse_pos)
@@ -391,8 +410,8 @@ class Level(object):
                     return False, self.init_score
                 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                # Right mouse click rotates the figure
                 if self.grid_area_rect.collidepoint(event.pos):
-                    # Right mouse click rotates the figure
                     self.figure = zip(*self.figure[::-1])
                     self.mouse_pos = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
                     self.create_figure_img()
@@ -400,12 +419,16 @@ class Level(object):
                     self.update_screen()
                             
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # Left mouse click places the figure
                 if self.grid_area_rect.collidepoint(event.pos) and coords_checked:
-                    # Left mouse click places the figure
                     self.mouse_pos = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
                     self.place_figure(self.mouse_pos)
                     coords_checked = self.check_place(self.mouse_pos)
                     self.update_screen()
+                # User can click one of the substance icons
+                for subst, rect in self.subst_rects.items():
+                    if rect.collidepoint(event.pos):
+                        self.activate_subst(subst, rect)
                 
             if event.type == pygame.MOUSEMOTION:
                 # Mouse moved above the grid area
@@ -419,6 +442,7 @@ class Level(object):
                     
                 else:
                     self.show_grid()
+                    pygame.display.update(self.update_rects)
                     if not mouse_visible:
                         pygame.mouse.set_visible(True)
                         mouse_visible = True
@@ -432,7 +456,18 @@ class Level(object):
             if self.defeat:
                 self.on_defeat()
                 return False, self.init_score
-
+    
+    def activate_subst(self, subst, rect):
+        if self.bonus >= self.costs[subst] and not self.active_subst:
+            print "Activating substance %s" % subst
+            self.active_subst = subst
+            self.bonus -= self.costs[subst]
+            self.show_subst()
+            self.show_bonus()
+            pygame.display.update(self.update_rects)
+            self.figure_image = {(0, 0): [self.images["sulphur"], [self.mouse_pos[0], self.mouse_pos[1]]]}
+            self.shadow = []
+    
         
     def on_victory(self):
         '''Show a "Well done!" message to the user'''
@@ -449,7 +484,7 @@ class Level(object):
         
         # Show the message window and the "Well done!" label
         self.screen.blit(self.images["msg"], (360, 340))
-        win_label = self.big_font.render("Well done!", 1, (255, 255, 255))
+        win_label = self.big_font.render("Well done!", 1, WHITE)
         self.screen.blit(win_label, (445, 380))
         
         pygame.display.update()
@@ -526,7 +561,7 @@ class Level(object):
         
         # Show the message window and the "Try again!" label
         self.screen.blit(self.images["msg"], (360, 340))
-        win_label = self.big_font.render("Try again!", 1, (255, 255, 255))
+        win_label = self.big_font.render("Try again!", 1, WHITE)
         self.screen.blit(win_label, (445, 380))
         
         pygame.display.update()
@@ -557,23 +592,33 @@ class Level(object):
         self.update_rects.append(self.grid_area_rect)
         self.show_grid()
         
-        next_label = self.big_font.render("Next:", 1, (255, 255, 255))
+        next_label = self.big_font.render("Next:", 1, WHITE)
         self.screen.blit(next_label, (20, 10))
         
         self.next_area = pygame.Surface((128, 128))
         self.update_rects.append(self.next_area.get_rect(topleft = NEXT_OFFSET))
         self.show_next()
         
-        goal_label = self.big_font.render("Metals to transmute:", 1, (255, 255, 255))
+        goal_label = self.big_font.render("Metals to transmute:", 1, WHITE)
         self.screen.blit(goal_label, (20, 170))
         self.show_goal()
         
-        score_l = self.smaller_font.render("Score: %i" % self.score, 1, (255,255,255))
+        score_l = self.smaller_font.render("Score: %i" % self.score, 1, WHITE)
         self.screen.blit(score_l, (20, 760))
-        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, (255,255,255))
+        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, WHITE)
         self.screen.blit(bonus_l, (900, 760))
         self.update_rects.append((20, 760, 120, 25))
         self.update_rects.append((900, 760, 120, 25))
+        
+        if self.substances:
+            subst_l = self.big_font.render("Substances:", 1, WHITE)
+            self.screen.blit(subst_l, (840, 170))
+            self.subst_rects = {}
+            for i, subst in enumerate(self.substances):
+                self.subst_rects[subst] = pygame.Rect(840, 210 + i * 120, 64, 64)
+                self.update_rects.append((840, 210 + i * 120, 64, 64))
+            print self.subst_rects
+            self.show_subst()
      
         init_mouse = pygame.mouse.get_pos()
         
@@ -749,7 +794,7 @@ class Level(object):
         # Create labels for the level goal
         for metal, quantity in self.goal.items():
             goal_label = "%s: %i" %(ELEMENTS[metal].capitalize(), quantity)
-            goal_labels.append(self.smaller_font.render(goal_label, 1, (255,255,255)))
+            goal_labels.append(self.smaller_font.render(goal_label, 1, WHITE))
         # Show labels
         for i, label in enumerate(goal_labels):
             self.screen.blit(self.images["bg_image"], (20, 205 + i*25), (20, 205 + i*25, 120, 25))
@@ -757,11 +802,13 @@ class Level(object):
             rect = (20, 205 + i*25, 120, 25)
             if rect not in self.update_rects: self.update_rects.append(rect)
         
-        score_l = self.smaller_font.render("Score: %i" % self.score, 1, (255,255,255))
+    def show_score(self):
+        score_l = self.smaller_font.render("Score: %i" % self.score, 1, WHITE)
         self.screen.blit(self.images["bg_image"], (20, 760), (20, 760, 120, 25))
         self.screen.blit(score_l, (20, 760))
-        
-        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, (255,255,255))
+    
+    def show_bonus(self):
+        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, WHITE)
         self.screen.blit(self.images["bg_image"], (900, 760), (900, 760, 120, 25))
         self.screen.blit(bonus_l, (900, 760))
         
@@ -786,6 +833,18 @@ class Level(object):
                 else:                    
                     self.grid_area.blit(self.images[ELEMENTS[cell]], (cnum * 32, rnum * 32))
         self.screen.blit(self.grid_area, GRID_OFFSET)
+    
+    def show_subst(self):
+        '''
+        Update substance icons.
+        Called every time there is a match.
+        '''
+        for i, subst in enumerate(self.substances):
+            # Substance icons may be normal or dark (not enough bonus)
+            if self.bonus >= self.costs[subst]:
+                self.screen.blit(self.images["%s_b" % subst], (840, 210 + i * 120))
+            else:
+                self.screen.blit(self.images["%s_bd" % subst], (840, 210 + i * 120))
         
     def handle_matches(self, row, col, cell):
         '''Find all matches with the current cell and destroy all matching cells'''
@@ -838,10 +897,10 @@ class Level(object):
             for d_row, d_col in d_coords: 
                 self.grid[d_row][d_col] = "0"
                 self.timer_grid[d_row][d_col] = 0
-            print "Element: %s" % element
+            
             self.score += 5 * counter
             self.bonus += counter - 2
-            print self.score, self.bonus
+            
 
         # Check adjacent cells in horizontal direction (left, then right)
         counter = 0
@@ -861,16 +920,19 @@ class Level(object):
             for d_row, d_col in d_coords:
                 self.grid[d_row][d_col] = "0"         
                 self.timer_grid[d_row][d_col] = 0
-            print "Element: %s" % element
+
             self.score += 5 * counter
             self.bonus += counter - 2
-            print self.score, self.bonus
+
                                 
         # If there was a match, destroy the cell itself
         if match_found: 
             self.grid[row][col] = "0"
             self.timer_grid[row][col] = 0
             self.show_goal()
+            self.show_score()
+            self.show_bonus()
+            self.show_subst()
             if all([quantity == 0 for quantity in self.goal.values()]): self.victory = True
                                     
 def main():
