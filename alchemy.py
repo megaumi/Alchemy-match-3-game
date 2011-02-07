@@ -357,12 +357,13 @@ class Level(object):
         self.goal = level["goal"]
         # When the user reaches some special levels, he automatically researches
         # new substances. Each substance can be researched only once.
-        self.research = level["research"]
-        if self.research and self.research not in self.substances:
-            self.substances.append(level["research"])
-            user_file = open("%s_progress" %self.game.username, "w")
-            user_file.write(json.dumps(self.game.user))
-            user_file.close()
+        if "research" in level:
+            self.research = level["research"]
+            if self.research not in self.substances:
+                self.substances.append(level["research"])
+                user_file = open("%s_progress" %self.game.username, "w")
+                user_file.write(json.dumps(self.game.user))
+                user_file.close()
 
     def run(self):
         '''Game cycle'''
