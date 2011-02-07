@@ -35,6 +35,7 @@ GRID_OFFSET = (300, 180)
 NEXT_OFFSET = (20, 40)
 
 WHITE = (255, 255, 255)
+GREY = (70, 70, 70)
 ELEMENTS = {
     "1": "mercury",
     "2": "saturn",
@@ -87,7 +88,7 @@ class Game(object):
         self.images['sulphur'] = img_load("images", "sulphur.png")
         self.images['sulphur_b'] = img_load("images", "sulphur_b.png")
         self.images['sulphur_bd'] = self.images['sulphur_b'].copy()
-        self.images['sulphur_bd'].fill((50, 50, 50), None, pygame.BLEND_SUB)
+        self.images['sulphur_bd'].fill(GREY, None, pygame.BLEND_SUB)
         
         # In-game element images
         for element in ELEMENTS.values():
@@ -104,10 +105,6 @@ class Game(object):
         self.big_font = pygame.font.Font("fonts/eufm10.ttf", 26)
         self.smaller_font = pygame.font.Font("fonts/eufm10.ttf", 22)
         self.biggest_font = pygame.font.Font("fonts/eufm10.ttf", 106)
-        
-        # Level labels used in self.game_screen()
-        for level in LEVELS:
-            self.images['level_%i' %level] = self.smaller_font.render("Level %i" %level, 1, WHITE)
 
         # ./settings_init file contains initial game settings.
         # ./settings is the file that we actually work with.
@@ -131,14 +128,13 @@ class Game(object):
         # Show the background image and the "Alchemy" logo with the shadow
         self.screen.blit(self.images["menu_bg"], (0,0))        
         logo_l = self.biggest_font.render("Alchemy", 1, WHITE)
-        logo_ls = self.biggest_font.render("Alchemy", 1, (70,70,70))
+        logo_ls = self.biggest_font.render("Alchemy", 1, GREY)
         title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, WHITE)
         self.screen.blit(logo_ls, (324, 93))
         self.screen.blit(logo_l, (320, 90))
         self.screen.blit(title_l, (345, 190))
         
         # Load main game settings from file
-        # Example settings: {"sound": 3, "music": 3, "user": "umi"}
         settings_file = open("settings", "r")
         self.settings = json.loads(settings_file.read())
         settings_file.close()
@@ -153,7 +149,6 @@ class Game(object):
             self.username = self.settings["user"]
         
         # Load user progress file
-        # Example: {"score": 700, "locked": [4]}
         user_file = open("%s_progress" %self.username, "r")
         self.user = json.loads(user_file.read())
         user_file.close()
@@ -164,7 +159,7 @@ class Game(object):
         new_quest_b_rect = new_quest_b.get_rect(topleft = (380, 410))
         # If we just created a user profile, "Continue Quest" should look (and be) disabled
         if new_user:
-            continue_quest_b = self.big_font.render("Continue Quest", 1, (50,50,50))
+            continue_quest_b = self.big_font.render("Continue Quest", 1, GREY)
         else:
             continue_quest_b = self.big_font.render("Continue Quest", 1, WHITE)
         continue_quest_b_rect = continue_quest_b.get_rect(topleft = (380, 360))        
@@ -274,7 +269,7 @@ class Game(object):
         self.screen.blit(self.images["menu_bg"], (0,0))
         
         logo_l = self.biggest_font.render("Alchemy", 1, WHITE)
-        logo_ls = self.biggest_font.render("Alchemy", 1, (70,70,70))
+        logo_ls = self.biggest_font.render("Alchemy", 1, GREY)
         title_l = self.smaller_font.render("In search of the Philosopher's Stone", 1, WHITE)
         self.screen.blit(logo_ls, (324, 93))
         self.screen.blit(logo_l, (320, 90))
@@ -292,9 +287,10 @@ class Game(object):
         self.screen.blit(score_l, (20, 760))
 
         for i in LEVELS:
-            image = self.images['level_%i' %i]
             if i in self.locked_levels:
-                image.fill((205, 205, 205), None, pygame.BLEND_SUB)
+                image = self.smaller_font.render("Level %i" %i, 1, GREY)
+            else:
+                image = self.smaller_font.render("Level %i" %i, 1, WHITE)
             level_image_rects[i] = (image.get_rect(topleft = (380, 320+i*40)))
             self.screen.blit(image, (380, 320+i*40))
 
@@ -319,7 +315,7 @@ class Game(object):
                                 user_file = open("%s_progress" %self.username, "w")
                                 if i+1 in self.locked_levels:
                                     self.locked_levels.remove(i+1)
-                                    self.images['level_%i' %(i+1)].fill(WHITE, None, pygame.BLEND_ADD)
+                                    #self.images['level_%i' %(i+1)].fill(WHITE, None, pygame.BLEND_ADD)
                                     self.user["locked"] = self.locked_levels
                                 user_file.write(json.dumps(self.user))
                                 user_file.close()
@@ -329,53 +325,44 @@ class Game(object):
 
 class Level(object):
     def __init__(self, game, level_id):
-        '''Load a level from a text file and run it'''
-        self.game = game
-        self.screen = self.game.screen
+        '''Load level details from the text file and initialize level'''
+        # Load the level file
         self.level_id = level_id
         level_file = open(os.path.join("levels", level_id), "r")
         level = json.loads(level_file.read())
         
-        self.grid_size = 15
-        self.figure_max_size = level["figure_max_size"]
+        self.clock = pygame.time.Clock()
+        self.game = game
+        self.screen = self.game.screen
         
-        self.elements = level["elements"]
-        self.spoilt = level["spoilt"]
-        self.locked = level["locked"]
-        
-        self.goal = level["goal"]
-        self.init_score = self.score = self.game.score        
-        self.bonus = 0
-        
-        self.substances = self.game.user["substances"]
-        self.costs = {"sulphur": 1, "mercury": 15, "salt": 20}
-        
-        # When user reaches some special levels, he automatically researches
-        # new substances. Each substance can be researched only once.
-        if "research" in level:
-            if level["research"] not in self.substances:
-                self.substances.append(level["research"])
-                user_file = open("%s_progress" %self.game.username, "w")
-                user_file.write(json.dumps(self.game.user))
-                user_file.close()                
-        
+        # Load resources: images and fonts
         self.images = self.game.images
-        
         self.images["bg_image"] = img_load("images", level["bg_image"])
-        
         self.big_font = self.game.big_font
         self.smaller_font = self.game.smaller_font
         
-        self.clock = pygame.time.Clock()
+        # Get main game parameters
+        self.init_score = self.score = self.game.score 
+        self.substances = self.game.user["substances"]
+        self.costs = self.game.user["costs"]        
+        # FIXME: Bonus is going to be one of the main game parameters as well
+        self.bonus = 0
         
+        # Load level parameters
         self.grid = [[str(cell) for cell in row] for row in level["field"]]
-        
-        self.timer_grid = [[0 for cell in row ] for row in level["field"]]
-        now = pygame.time.get_ticks()/1000
-        for rnum, row in enumerate(self.grid):
-            for cnum, cell in enumerate(row):
-                if cell <> "0" and cell <> "4" and cell <> "7" and cell <> "b":
-                    self.timer_grid[rnum][cnum] = now + 60 + random.randint(0,5)
+        self.figure_max_size = level["figure_max_size"]
+        self.elements = level["elements"]
+        self.spoilt = level["spoilt"]
+        self.locked = level["locked"]
+        self.goal = level["goal"]
+        # When the user reaches some special levels, he automatically researches
+        # new substances. Each substance can be researched only once.
+        self.research = level["research"]
+        if self.research and self.research not in self.substances:
+            self.substances.append(level["research"])
+            user_file = open("%s_progress" %self.game.username, "w")
+            user_file.write(json.dumps(self.game.user))
+            user_file.close()
 
     def run(self):
         '''Game cycle'''
@@ -394,12 +381,22 @@ class Level(object):
         coords_checked = self.check_place(self.mouse_pos)
         self.update_screen()
         
+        self.timer_grid = [[0 for cell in row ] for row in self.grid]
+        now = pygame.time.get_ticks()/1000
+        for rnum, row in enumerate(self.grid):
+            for cnum, cell in enumerate(row):
+                if cell <> "0" and cell <> "4" and cell <> "7" and cell <> "b":
+                    self.timer_grid[rnum][cnum] = now + 60 + random.randint(0,5)  
+                          
         while True:
-            
-            self.clock.tick(60)
+            self.clock.tick(90)
             event = pygame.event.poll()
             pygame.event.clear()
-            
+            #for event in pygame.event.get():
+                #if event.type == pygame.MOUSEMOTION:
+                    #pygame.event.clear(pygame.MOUSEMOTION)
+                    #pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN])
+                
             if event.type == pygame.QUIT:
                 sys.exit()
             if event.type == pygame.KEYDOWN:
@@ -456,6 +453,7 @@ class Level(object):
             if self.defeat:
                 self.on_defeat()
                 return False, self.init_score
+                #pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.MOUSEMOTION])
     
     def activate_subst(self, subst, rect):
         if self.bonus >= self.costs[subst] and not self.active_subst:
@@ -734,7 +732,7 @@ class Level(object):
 
     def place_figure(self, pos):
         '''
-        Add new values to the grid, handle matches for new values, generate
+        Add the new values to the grid, handle matches for the new values, generate
         the next figure and show it in the next_area
         '''
         row, col = self.get_row_col(pos)
