@@ -116,6 +116,7 @@ class Game(object):
         # Sounds
         self.sounds["click"] = pygame.mixer.Sound("sounds/click.wav")
         self.sounds["sulphur"] = pygame.mixer.Sound("sounds/sulphur.wav")
+        self.sounds["positive"] = pygame.mixer.Sound("sounds/positive.wav")
 
         # ./settings_init file contains initial game settings.
         # ./settings is the file that we actually work with.
@@ -383,7 +384,49 @@ class Level(object):
         self.subst_funcs = {
             "sulphur": self.place_sulphur
             }
+    
+    def set_screen(self):
+        '''Set screen for the level'''
+        self.update_rects = []
+        self.screen.blit(self.images["bg_image"], (0, 0))
+        self.screen.blit(self.images['grid_border'], (GRID_OFFSET[0]-32, GRID_OFFSET[1]-32))
+        
+        self.grid_area = self.images['grid'].copy()
+        self.grid_area_rect = self.grid_area.get_rect(topleft = GRID_OFFSET)
+        #self.update_rects.append(self.grid_area_rect)
+        self.show_grid()
+        
+        next_label = self.big_font.render("Next:", 1, WHITE)
+        self.screen.blit(next_label, (20, 10))
+        
+        self.next_area = pygame.Surface((128, 128))
 
+        self.show_next()
+        
+        goal_label = self.big_font.render("Metals to transmute:", 1, WHITE)
+        self.screen.blit(goal_label, (20, 170))
+        self.show_goal()
+        
+        score_l = self.smaller_font.render("Score: %i" % self.score, 1, WHITE)
+        self.screen.blit(score_l, (20, 760))
+        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, WHITE)
+        self.screen.blit(bonus_l, (900, 760))
+        
+        if self.substances:
+            subst_l = self.big_font.render("Substances:", 1, WHITE)
+            self.screen.blit(subst_l, (840, 170))
+            self.subst_rects = {}
+            self.show_subst()
+     
+        init_mouse = pygame.mouse.get_pos()
+        
+        if self.grid_area_rect.collidepoint(init_mouse):
+            pygame.mouse.set_visible(False)
+            self.mouse_visible = False
+            self.grid_pos = init_mouse[0] - GRID_OFFSET[0], init_mouse[1] - GRID_OFFSET[1]
+
+        pygame.display.update()
+    
     def run(self):
         '''Game cycle'''
 
@@ -399,7 +442,9 @@ class Level(object):
         self.set_screen()
         self.create_figure_img()
         self.coords_checked = self.check_place(self.grid_pos)
-        self.update_screen()
+        self.update_grid_area()
+        
+        self.subst_image = None
         
         self.timer_grid = [[0 for cell in row ] for row in self.grid]
         now = pygame.time.get_ticks()/1000
@@ -430,32 +475,13 @@ class Level(object):
                     self.grid_pos = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
                     self.create_figure_img()
                     self.coords_checked = self.check_place(self.grid_pos)
-                    self.update_screen()
+                    self.update_grid_area()
             # Left mouse click
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self.on_mouse_click(event.pos)
             # Mouse moved    
             if event.type == pygame.MOUSEMOTION:
-                if self.active_subst and self.grid_area_rect.collidepoint(event.pos):
-                    pygame.mouse.set_visible(False)
-                    mouse_visible = False
-                    self.coords_checked = self.move_subst(event.pos)
-                # Mouse moved above the grid area
-                elif self.grid_area_rect.collidepoint(event.pos):
-                    pygame.mouse.set_visible(False)
-                    mouse_visible = False
-                    self.grid_pos = event.pos[0] - GRID_OFFSET[0], event.pos[1] - GRID_OFFSET[1]
-                    self.create_figure_img()
-                    self.coords_checked = self.check_place(self.grid_pos)
-                    self.update_screen()
-                    
-                else:
-                    self.show_grid()
-                    pygame.display.update(self.update_rects)
-                    if not mouse_visible:
-                        pygame.mouse.set_visible(True)
-                        mouse_visible = True
-                self.old_pos = event.pos
+                self.on_mouse_motion(event.pos)
 
             self.age_metal()
                 
@@ -487,62 +513,60 @@ class Level(object):
                 self.subst_funcs[self.active_subst](self.grid_pos)
                 self.create_figure_img()
                 self.coords_checked = self.check_place(self.grid_pos)
-                self.update_screen()
+                self.update_grid_area()
             # The user is trying to place the figure
             elif self.coords_checked:
                 self.place_figure(self.grid_pos)
                 self.coords_checked = self.check_place(self.grid_pos)
-                self.update_screen()
+                self.update_grid_area()
         else:
             # Check if the user clicked one of the substance icons
             for subst, rect in self.subst_rects.items():
                 if rect.collidepoint(pos):
                     self.activate_subst(subst, rect)                
-                
-    def activate_subst(self, subst, rect):
-        if self.bonus >= self.costs[subst] and not self.active_subst:
-            print "Activating substance %s" % subst
-            self.sounds["sulphur"].play()
-            self.active_subst = subst
-            self.bonus -= self.costs[subst]
-            self.show_subst()
-            self.show_bonus()    
+    
+    def on_mouse_motion(self, pos):
+        '''Handle mouse motion.
         
-    def on_victory(self):
-        '''Show a "Well done!" message to the user'''
+        First check if the user is moving a substance icon or the figure image.
+        Then check if the mouse moved inside or outside of the grid area.'''
+        # The user is going to use a substance
+        if self.active_subst:
+            # Above the grid
+            if self.grid_area_rect.collidepoint(pos):
+                pygame.mouse.set_visible(False)
+                self.mouse_visible = False
+                self.coords_checked = self.create_subst_image(pos)
+                self.update_grid_area()
+            # Outside of the grid
+            # TODO: Substance icons must be seen outside of the grid
+            else:
+                self.show_grid()
+                pygame.display.update(self.update_rects)
+                if not self.mouse_visible:
+                    pygame.mouse.set_visible(True)
+                    self.mouse_visible = True
+        # The user is moving the figure
+        else:
+            # Above the grid
+            if self.grid_area_rect.collidepoint(pos):
+                pygame.mouse.set_visible(False)
+                self.mouse_visible = False
+                self.grid_pos = pos[0] - GRID_OFFSET[0], pos[1] - GRID_OFFSET[1]
+                self.create_figure_img()
+                self.coords_checked = self.check_place(self.grid_pos)
+                self.update_grid_area()
+            # Outside of the grid: hide the figure image
+            else:
+                self.show_grid()
+                pygame.display.update(self.update_rects)
+                if not self.mouse_visible:
+                    pygame.mouse.set_visible(True)
+                    self.mouse_visible = True
         
-        if not self.mouse_visible:
-            pygame.mouse.set_visible(True)
-            self.mouse_visible = True
+        # Store current mouse position to use it later
+        self.old_pos = pos
         
-        # Remove the image of the figure and its shadow from the grid
-        self.show_grid()
-        
-        # Darken the game screen
-        self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
-        
-        # Show the message window and the "Well done!" label
-        self.screen.blit(self.images["msg"], (360, 340))
-        win_label = self.big_font.render("Well done!", 1, WHITE)
-        self.screen.blit(win_label, (445, 380))
-        
-        pygame.display.update()
-        
-        # Wait for the user's input
-        while True:
-            self.clock.tick(60)
-            event = pygame.event.poll()
-            pygame.event.clear()
-            
-            if event.type == pygame.QUIT:
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    sys.exit()
-            # Left mouse click returns us to the games screen
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                return
-                    
     def get_next_figure(self):
         '''
         Generate a new figure.
@@ -584,126 +608,138 @@ class Level(object):
                 next_figure[row][col] = cell
                 
         return next_figure
-
-    def on_defeat(self):
-        '''Show a "Try again!" message to the user'''
-        
-        if not self.mouse_visible:
-            pygame.mouse.set_visible(True)
-            self.mouse_visible = True
-        
-        # Remove the image of the figure and its shadow from the grid
-        self.show_grid()
-        
-        # Darken the game screen
-        self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
-        
-        # Show the message window and the "Try again!" label
-        self.screen.blit(self.images["msg"], (360, 340))
-        win_label = self.big_font.render("Try again!", 1, WHITE)
-        self.screen.blit(win_label, (445, 380))
-        
-        pygame.display.update()
-        
-        # Wait for the user's input
-        while True:
-            self.clock.tick(60)
-            event = pygame.event.poll()
-            pygame.event.clear()
-            
-            if event.type == pygame.QUIT:
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    sys.exit()
-            # Left mouse click returns us to the games screen
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                return
- 
-    def set_screen(self):
-        '''Set screen for current level'''
-        self.update_rects = []
-        self.screen.blit(self.images["bg_image"], (0, 0))
-        self.screen.blit(self.images['grid_border'], (GRID_OFFSET[0]-32, GRID_OFFSET[1]-32))
-        
-        self.grid_area = self.images['grid'].copy()
-        self.grid_area_rect = self.grid_area.get_rect(topleft = GRID_OFFSET)
-        #self.update_rects.append(self.grid_area_rect)
-        self.show_grid()
-        
-        next_label = self.big_font.render("Next:", 1, WHITE)
-        self.screen.blit(next_label, (20, 10))
-        
-        self.next_area = pygame.Surface((128, 128))
-
-        self.show_next()
-        
-        goal_label = self.big_font.render("Metals to transmute:", 1, WHITE)
-        self.screen.blit(goal_label, (20, 170))
-        self.show_goal()
-        
-        score_l = self.smaller_font.render("Score: %i" % self.score, 1, WHITE)
-        self.screen.blit(score_l, (20, 760))
-        bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, WHITE)
-        self.screen.blit(bonus_l, (900, 760))
-
-        
-        if self.substances:
-            subst_l = self.big_font.render("Substances:", 1, WHITE)
-            self.screen.blit(subst_l, (840, 170))
-            self.subst_rects = {}
-            self.show_subst()
-     
-        init_mouse = pygame.mouse.get_pos()
-        
-        if self.grid_area_rect.collidepoint(init_mouse):
-            pygame.mouse.set_visible(False)
-            self.mouse_visible = False
-            self.grid_pos = init_mouse[0] - GRID_OFFSET[0], init_mouse[1] - GRID_OFFSET[1]
-
-        pygame.display.update()
-       
-    def create_figure_img(self):
-        '''
-        Create a dict containing images for every cell of the figure and their
-        coordinates in order to blit all cell images when updating screen.
-        Every time the mouse is moved all cell images must be updated because
-        it is possible that some of them were darkened by self.check_place() before
-        '''
-        self.figure_image = {}
-        for rnum, c_row in enumerate(self.figure):
-            for cnum, cell in enumerate(c_row):
-                if cell:
-                    cell_image = self.images[ELEMENTS[cell]].copy()
-                else: continue       # No need to check an empty cell
-                self.figure_image[rnum, cnum] = [cell_image, [self.grid_pos[0] + cnum*32, self.grid_pos[1] + rnum*32]]
-        self.shadow = []
     
-    def check_place(self, pos):
-        '''
-        Check whether the figure can be placed in current mouse position.
-        If not, update shadow and darken appropriate cells of the 
-        current figure.
-        '''
-        row, col = self.get_row_col(pos)
+    def handle_matches(self, row, col, cell):
+        '''Find all matches with the current cell and destroy all matching cells'''
         
-        check_results = []
-        
-        for rnum, c_row in enumerate(self.figure):
-            for cnum, cell in enumerate(c_row):
-                if not cell: continue       # No need to check an empty cell
-                try:
-                    if self.grid[row + rnum][col + cnum] == "0":
-                        check_results.append(True)
-                        self.shadow.append(((col+cnum)*32, (row+rnum)*32))
-                    else:
-                        check_results.append(False)
-                        self.figure_image[rnum, cnum][0].fill((50, 50,50), None, pygame.BLEND_SUB)
-                except IndexError:
-                    check_results.append(False)
+        def check_dir(row, col, dir, cell, counter, d_coords):
+            '''
+            Check the next cell in given direction. If it has the same color as the current cell,
+            store its coords (to delete it later) and pass it to this function recursively
+            with an incremented counter
+            '''
+            n_row = row + dir[0]
+            n_col = col + dir[1]
+            self.color= None            
+            
+            # We don't want to get outside of our grid
+            if not (n_row < 0 or n_col < 0 or n_row >= len(self.grid) or n_col >= len(self.grid)):
+                print "I'm in (%i, %i), looking into (%i, %i) the counter is %i" %(row, col, n_row, n_col, counter)
+                print "cell is %s, next grid cell is %s" %(cell, self.grid[n_row][n_col])
+                # If the last character is "l" (which indicates a locked cell)
+                # then there's no match for sure
+                if self.grid[n_row][n_col].endswith("locked") or cell.endswith("locked"):
+                    return counter, d_coords
+                if self.grid[n_row][n_col] == "sul":
+                    counter+=1
+                elif self.grid[n_row][n_col][0] != "0" and cell == "sul":
+                    if (not self.color) or self.color == self.grid[n_row][n_col][0]:
+                        self.color = self.grid[n_row][n_col][0]
+                        d_coords.append([n_row, n_col])
+                        counter += 1
+                        counter, d_coords = check_dir(n_row, n_col, dir, self.grid[n_row][n_col], counter, d_coords)
 
-        coords_checked = all(check_results)
-        return coords_checked       
+                # We compare only the first character, so that "1" and "1s"
+                # (which are mercury and spoilt mercury) will make a match
+                if self.grid[n_row][n_col][0] == cell[0]:
+
+                    d_coords.append([n_row, n_col])
+                    counter += 1
+                    counter, d_coords = check_dir(n_row, n_col, dir, cell, counter, d_coords)
+            return counter, d_coords
+
+        up = -1, 0
+        down = 1, 0
+        left = 0, -1
+        right = 0, 1 
+                
+        match_found = False
+        bonus_changed = False
+        
+        # Check adjacent cells in vertical direction (up, then down)
+        counter = 0
+        d_coords = []
+       
+        counter, d_coords = check_dir(row, col, up, cell, counter, d_coords)
+        counter, d_coords  = check_dir(row, col, down, cell, counter, d_coords)
+
+        if counter >= 2: 
+            match_found = True
+            element = cell[0]
+            if element in self.goal:
+                if self.goal[element] <= 0:
+                    self.goal[element] = 0
+                else:
+                    self.goal[element] -=1
+            for d_row, d_col in d_coords: 
+                self.grid[d_row][d_col] = "0"
+                self.timer_grid[d_row][d_col] = 0
+            
+            self.score += 5 * counter
+            if (counter - 2) > 0:
+                self.bonus += counter - 2
+                bonus_changed = True            
+
+        # Check adjacent cells in horizontal direction (left, then right)
+        counter = 0
+        d_coords = []
+
+        counter, d_coords = check_dir(row, col, left, cell, counter, d_coords)
+        counter, d_coords = check_dir(row, col, right, cell, counter, d_coords)
+
+        if counter >= 2:
+            element = cell[0]
+            match_found = True
+            if element in self.goal:
+                if self.goal[element] <= 0:
+                    self.goal[element] = 0
+                else:
+                    self.goal[element] -=1
+            for d_row, d_col in d_coords:
+                self.grid[d_row][d_col] = "0"         
+                self.timer_grid[d_row][d_col] = 0
+
+            self.score += 5 * counter
+            if (counter - 2) > 0:
+                self.bonus += counter - 2
+                bonus_changed = True
+               
+        # If there was a match, destroy the cell itself
+        if match_found: 
+            self.grid[row][col] = "0"
+            self.timer_grid[row][col] = 0
+            if self.bonus > 0 and bonus_changed and self.bonus % 5 == 0:
+                self.sounds["positive"].play() 
+            self.show_goal()
+            self.show_score()
+            self.show_bonus()
+            self.show_subst()
+            if all([quantity == 0 for quantity in self.goal.values()]): self.victory = True    
+    
+    def update_grid_area(self):
+        '''Update the grid area.
+        
+        This function is called every time something changes in the grid area:
+        the user moves the figure above the grid, places the figure, uses
+        the substance, rotates the figure, and so on.
+        It is also called from self.age_metal().'''
+        # Re-draw the grid
+        self.show_grid()
+
+        # Show the shadow
+        for coords in self.shadow:
+            self.grid_area.blit(self.images['shadow'], coords)
+        
+        # Show the active substance or the figure
+        if self.active_subst:
+            self.grid_area.blit(self.subst_image, self.grid_pos)
+        else:
+            for cell in self.figure_image.values():
+                self.grid_area.blit(*cell)
+        
+        # Update the screen
+        self.screen.blit(self.grid_area, GRID_OFFSET)
+        pygame.display.update(self.update_rects)
     
     def global_check_place(self):
         '''
@@ -745,27 +781,127 @@ class Level(object):
         
         # If we did not return at some point then no place was found for current figure => the game is lost
         self.defeat = True
+
+    def create_figure_img(self):
+        '''
+        Create a dict containing images for every cell of the figure and their
+        coordinates in order to blit all cell images when updating screen.
+        Every time the mouse is moved all cell images must be updated because
+        it is possible that some of them were darkened by self.check_place() before
+        '''
+        self.figure_image = {}
+        for rnum, c_row in enumerate(self.figure):
+            for cnum, cell in enumerate(c_row):
+                if cell:
+                    cell_image = self.images[ELEMENTS[cell]].copy()
+                else: continue       # No need to check an empty cell
+                self.figure_image[rnum, cnum] = [cell_image, [self.grid_pos[0] + cnum*32, self.grid_pos[1] + rnum*32]]
+        self.shadow = []
     
-    def update_screen(self):
-        '''Update the grid, the figure image and its shadow.
+    def check_place(self, pos):
+        '''
+        Check whether the figure can be placed in current mouse position.
+        If not, update shadow and darken appropriate cells of the 
+        current figure.
+        '''
+        row, col = self.get_row_col(pos)
         
-        This function is called every time the user moves or left-clicks
-        his mouse or rotates the figure.
-        It is also called before the game loop (right after the screen
-        has been set).'''
-        # Update the grid area
+        check_results = []
+        
+        for rnum, c_row in enumerate(self.figure):
+            for cnum, cell in enumerate(c_row):
+                if not cell: continue       # No need to check an empty cell
+                try:
+                    if self.grid[row + rnum][col + cnum] == "0":
+                        check_results.append(True)
+                        self.shadow.append(((col+cnum)*32, (row+rnum)*32))
+                    else:
+                        check_results.append(False)
+                        self.figure_image[rnum, cnum][0].fill((50, 50,50), None, pygame.BLEND_SUB)
+                except IndexError:
+                    check_results.append(False)
+
+        coords_checked = all(check_results)
+        return coords_checked
+        
+    def on_victory(self):
+        '''Show a "Well done!" message to the user'''
+        
+        if not self.mouse_visible:
+            pygame.mouse.set_visible(True)
+            self.mouse_visible = True
+        
+        # Remove the image of the figure and its shadow from the grid
         self.show_grid()
-
-        # Show the shadow of the current figure
-        for coords in self.shadow:
-            self.grid_area.blit(self.images['shadow'], coords)
-
-        # Show the figure
-        for cell in self.figure_image.values():
-            self.grid_area.blit(*cell)
-        self.screen.blit(self.grid_area, GRID_OFFSET)
-
-        pygame.display.update(self.update_rects)
+        
+        # Darken the game screen
+        self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
+        
+        # Show the message window and the "Well done!" label
+        self.screen.blit(self.images["msg"], (360, 340))
+        win_label = self.big_font.render("Well done!", 1, WHITE)
+        self.screen.blit(win_label, (445, 380))
+        
+        pygame.display.update()
+        
+        # Wait for the user's input
+        while True:
+            self.clock.tick(60)
+            event = pygame.event.poll()
+            pygame.event.clear()
+            
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+            # Left mouse click returns us to the games screen
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                return
+    
+    def on_defeat(self):
+        '''Show a "Try again!" message to the user'''
+        
+        if not self.mouse_visible:
+            pygame.mouse.set_visible(True)
+            self.mouse_visible = True
+        
+        # Remove the image of the figure and its shadow from the grid
+        self.show_grid()
+        
+        # Darken the game screen
+        self.screen.fill((100, 100, 100), None, pygame.BLEND_MULT)
+        
+        # Show the message window and the "Try again!" label
+        self.screen.blit(self.images["msg"], (360, 340))
+        win_label = self.big_font.render("Try again!", 1, WHITE)
+        self.screen.blit(win_label, (445, 380))
+        
+        pygame.display.update()
+        
+        # Wait for the user's input
+        while True:
+            self.clock.tick(60)
+            event = pygame.event.poll()
+            pygame.event.clear()
+            
+            if event.type == pygame.QUIT:
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    sys.exit()
+            # Left mouse click returns us to the games screen
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                return
+                                
+    def activate_subst(self, subst, rect):
+        if self.bonus >= self.costs[subst] and not self.active_subst:
+            print "Activating substance %s" % subst
+            self.sounds["sulphur"].play()
+            self.active_subst = subst
+            self.bonus -= self.costs[subst]
+            self.show_subst()
+            self.show_bonus()
 
     def place_sulphur(self, pos):
         if self.coords_checked:
@@ -809,7 +945,7 @@ class Level(object):
     def age_metal(self):
         '''
         Check if one or more pieces of metal aged. 
-        If yes, update the timers and the screen.
+        If yes, update the timers and the grid area.
         '''
         changed = False
         now = pygame.time.get_ticks()/1000
@@ -823,7 +959,7 @@ class Level(object):
                         self.grid[rnum][cnum] = "o" 
                         self.timer_grid[rnum][cnum] = 0
                     changed = True
-        if changed: self.show_grid()
+        if changed: self.update_grid_area()
     
     @staticmethod
     def get_row_col(pos):
@@ -849,8 +985,7 @@ class Level(object):
         score_l = self.smaller_font.render("Score: %i" % self.score, 1, WHITE)
         self.screen.blit(self.images["bg_image"], (20, 760), (20, 760, 120, 25))
         self.screen.blit(score_l, (20, 760))
-        self.update_rects.append((20, 760, 120, 25))
-        
+        self.update_rects.append((20, 760, 120, 25))        
     
     def show_bonus(self):
         bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, WHITE)
@@ -869,7 +1004,7 @@ class Level(object):
         self.update_rects.append(self.next_area.get_rect(topleft = NEXT_OFFSET))
 
     def show_grid(self):
-        '''Update screen in the grid area cell by cell'''
+        '''Create the grid image cell by cell'''
         for rnum, row in enumerate(self.grid):
             for cnum, cell in enumerate(row):
                 if cell == "0":
@@ -899,133 +1034,25 @@ class Level(object):
             self.subst_rects[subst] = pygame.Rect(840, 210 + i * 120, 64, 64)
             self.update_rects.append((840, 210 + i * 120, 64, 64))
     
-    def move_subst(self, pos):
+    def create_subst_image(self, pos):
+        self.shadow = []
         image = self.images["sulphur"].copy()
-        #if self.grid_area_rect.collidepoint(pos):
-        self.show_grid()
         self.grid_pos = pos[0] - GRID_OFFSET[0], pos[1] - GRID_OFFSET[1]
         row, col = self.get_row_col(self.grid_pos)
         try:
             if self.grid[row][col] == "0":
-                self.shadow.append((GRID_OFFSET[0] + (col)*32, GRID_OFFSET[1] + (row)*32))
+                self.shadow.append(((col)*32, (row)*32))
                 can_place = True
             else:
                 image.fill((50, 50,50), None, pygame.BLEND_SUB)
                 can_place = False
         except IndexError:
             can_place = False
-        for coords in self.shadow:
-            self.screen.blit(self.images['shadow'], coords)
-        self.shadow = []
-        #else:
-            #self.screen.blit(self.images["bg_image"], self.old_pos, (self.old_pos[0], self.old_pos[1], 32, 32))
-            #self.update_rects.append((self.old_pos[0], self.old_pos[1], 32, 32))
-        self.screen.blit(image, pos)
+            ##self.screen.blit(self.images["bg_image"], self.old_pos, (self.old_pos[0], self.old_pos[1], 32, 32))
+            ##self.update_rects.append((self.old_pos[0], self.old_pos[1], 32, 32))
+        self.subst_image = image
         return can_place
-        
-    def handle_matches(self, row, col, cell):
-        '''Find all matches with the current cell and destroy all matching cells'''
-        
-        def check_dir(row, col, dir, cell, counter, d_coords):
-            '''
-            Check the next cell in given direction. If it has the same color as the current cell,
-            store its coords (to delete it later) and pass it to this function recursively
-            with an incremented counter
-            '''
-            n_row = row + dir[0]
-            n_col = col + dir[1]
-            self.color= None            
-            
-            # We don't want to get outside of our grid
-            if not (n_row < 0 or n_col < 0 or n_row >= len(self.grid) or n_col >= len(self.grid)):
-                print "I'm in (%i, %i), looking into (%i, %i) the counter is %i" %(row, col, n_row, n_col, counter)
-                print "cell is %s, next grid cell is %s" %(cell, self.grid[n_row][n_col])
-                # If the last character is "l" (which indicates a locked cell)
-                # then there's no match for sure
-                if self.grid[n_row][n_col].endswith("locked") or cell.endswith("locked"):
-                    return counter, d_coords
-                if self.grid[n_row][n_col] == "sul":
-                    counter+=1
-                elif self.grid[n_row][n_col][0] != "0" and cell == "sul":
-                    if (not self.color) or self.color == self.grid[n_row][n_col][0]:
-                        self.color = self.grid[n_row][n_col][0]
-                        d_coords.append([n_row, n_col])
-                        counter += 1
-                        counter, d_coords = check_dir(n_row, n_col, dir, self.grid[n_row][n_col], counter, d_coords)
-                
-
-                # We compare only the first character, so that "1" and "1s"
-                # (which are mercury and spoilt mercury) will make a match
-                if self.grid[n_row][n_col][0] == cell[0]:
-
-                    d_coords.append([n_row, n_col])
-                    counter += 1
-                    counter, d_coords = check_dir(n_row, n_col, dir, cell, counter, d_coords)
-            return counter, d_coords
-
-        up = -1, 0
-        down = 1, 0
-        left = 0, -1
-        right = 0, 1 
-                
-        match_found = False
-        
-        # Check adjacent cells in vertical direction (up, then down)
-        counter = 0
-        d_coords = []
-       
-        counter, d_coords = check_dir(row, col, up, cell, counter, d_coords)
-        counter, d_coords  = check_dir(row, col, down, cell, counter, d_coords)
-
-        if counter >= 2: 
-            match_found = True
-            element = cell[0]
-            if element in self.goal:
-                if self.goal[element] <= 0:
-                    self.goal[element] = 0
-                else:
-                    self.goal[element] -=1
-            for d_row, d_col in d_coords: 
-                self.grid[d_row][d_col] = "0"
-                self.timer_grid[d_row][d_col] = 0
-            
-            self.score += 5 * counter
-            self.bonus += counter - 2
-            
-
-        # Check adjacent cells in horizontal direction (left, then right)
-        counter = 0
-        d_coords = []
-
-        counter, d_coords = check_dir(row, col, left, cell, counter, d_coords)
-        counter, d_coords = check_dir(row, col, right, cell, counter, d_coords)
-
-        if counter >= 2:
-            element = cell[0]
-            match_found = True
-            if element in self.goal:
-                if self.goal[element] <= 0:
-                    self.goal[element] = 0
-                else:
-                    self.goal[element] -=1
-            for d_row, d_col in d_coords:
-                self.grid[d_row][d_col] = "0"         
-                self.timer_grid[d_row][d_col] = 0
-
-            self.score += 5 * counter
-            self.bonus += counter - 2
-
-                                
-        # If there was a match, destroy the cell itself
-        if match_found: 
-            self.grid[row][col] = "0"
-            self.timer_grid[row][col] = 0
-            self.show_goal()
-            self.show_score()
-            self.show_bonus()
-            self.show_subst()
-            if all([quantity == 0 for quantity in self.goal.values()]): self.victory = True
-                                    
+                                            
 def main():
     game = Game()
     
