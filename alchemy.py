@@ -52,7 +52,7 @@ ELEMENTS = {
     "o": "old"
     }
 
-LEVELS = (1, 2, 3, 4, 5)
+LEVELS = (1, 2, 3, 4, 5, 6, 7)
 
 TIMER = 60
 
@@ -91,7 +91,6 @@ class Game(object):
         self.images['grid'] = img_load("images", "grid.jpg")
         self.images['shadow'] = img_load("images", "shadow.png")
         self.images['border'] = img_load("images", "border.png")
-        self.images['grid_border'] = img_load("images", "grid_border.png")
         self.images['sulphur'] = img_load("images", "sulphur.png")
         self.images['sulphur_b'] = img_load("images", "sulphur_b.png")
         self.images['sulphur_bd'] = self.images['sulphur_b'].copy()
@@ -350,6 +349,7 @@ class Level(object):
         # Load resources: images, sounds and fonts
         self.images = self.game.images
         self.images["bg_image"] = img_load("images", level["bg_image"])
+        self.images['grid_border'] = img_load("images", level["grid_border"])
         self.sounds = self.game.sounds
         self.big_font = self.game.big_font
         self.smaller_font = self.game.smaller_font
@@ -376,6 +376,7 @@ class Level(object):
             self.research = level["research"]
             if self.research not in self.substances:
                 self.substances.append(level["research"])
+                self.game.user["substances"] = self.substances
                 user_file = open("%s_progress" %self.game.username, "w")
                 user_file.write(json.dumps(self.game.user))
                 user_file.close()
@@ -412,10 +413,10 @@ class Level(object):
         bonus_l = self.smaller_font.render("Bonus: %i" % self.bonus, 1, WHITE)
         self.screen.blit(bonus_l, (900, 760))
         
+        self.subst_rects = {}
         if self.substances:
             subst_l = self.big_font.render("Substances:", 1, WHITE)
             self.screen.blit(subst_l, (840, 170))
-            self.subst_rects = {}
             self.show_subst()
      
         init_mouse = pygame.mouse.get_pos()
@@ -450,7 +451,7 @@ class Level(object):
         now = pygame.time.get_ticks()/1000
         for rnum, row in enumerate(self.grid):
             for cnum, cell in enumerate(row):
-                if cell <> "0" and cell <> "4" and cell <> "7" and cell <> "b":
+                if cell <> "0" and cell <> "4" and cell <> "7" and cell <> "b" and cell <> "e":
                     self.timer_grid[rnum][cnum] = now + TIMER + random.randint(0,5)  
         self.old_pos = pygame.mouse.get_pos()
         
@@ -611,7 +612,33 @@ class Level(object):
     
     def handle_matches(self, row, col, cell):
         '''Find all matches with the current cell and destroy all matching cells'''
-        
+
+        def find_matches(dir1, dir2):
+            '''Check adjacent cells in given direction (e.g.: up, then down)'''
+            counter = 0
+            d_coords = []
+           
+            counter, d_coords = check_dir(row, col, dir1, cell, counter, d_coords)
+            counter, d_coords  = check_dir(row, col, dir2, cell, counter, d_coords)
+    
+            if counter >= 2: 
+                match_found = True
+                element = cell[0]
+                if element in self.goal:
+                    if self.goal[element] <= 0:
+                        self.goal[element] = 0
+                    else:
+                        self.goal[element] -=1
+                for d_row, d_col in d_coords: 
+                    self.grid[d_row][d_col] = "0"
+                    self.timer_grid[d_row][d_col] = 0
+                
+                self.score += 5 * counter
+                if (counter - 2) > 0:
+                    self.bonus += counter - 2
+                    self.sounds["positive"].play()
+                return match_found
+                    
         def check_dir(row, col, dir, cell, counter, d_coords):
             '''
             Check the next cell in given direction. If it has the same color as the current cell,
@@ -653,63 +680,12 @@ class Level(object):
         left = 0, -1
         right = 0, 1 
                 
-        match_found = False
-        bonus_changed = False
-        
-        # Check adjacent cells in vertical direction (up, then down)
-        counter = 0
-        d_coords = []
-       
-        counter, d_coords = check_dir(row, col, up, cell, counter, d_coords)
-        counter, d_coords  = check_dir(row, col, down, cell, counter, d_coords)
-
-        if counter >= 2: 
-            match_found = True
-            element = cell[0]
-            if element in self.goal:
-                if self.goal[element] <= 0:
-                    self.goal[element] = 0
-                else:
-                    self.goal[element] -=1
-            for d_row, d_col in d_coords: 
-                self.grid[d_row][d_col] = "0"
-                self.timer_grid[d_row][d_col] = 0
-            
-            self.score += 5 * counter
-            if (counter - 2) > 0:
-                self.bonus += counter - 2
-                bonus_changed = True            
-
-        # Check adjacent cells in horizontal direction (left, then right)
-        counter = 0
-        d_coords = []
-
-        counter, d_coords = check_dir(row, col, left, cell, counter, d_coords)
-        counter, d_coords = check_dir(row, col, right, cell, counter, d_coords)
-
-        if counter >= 2:
-            element = cell[0]
-            match_found = True
-            if element in self.goal:
-                if self.goal[element] <= 0:
-                    self.goal[element] = 0
-                else:
-                    self.goal[element] -=1
-            for d_row, d_col in d_coords:
-                self.grid[d_row][d_col] = "0"         
-                self.timer_grid[d_row][d_col] = 0
-
-            self.score += 5 * counter
-            if (counter - 2) > 0:
-                self.bonus += counter - 2
-                bonus_changed = True
+        match_found = any((find_matches(up, down), find_matches(left, right)))
                
         # If there was a match, destroy the cell itself
         if match_found: 
             self.grid[row][col] = "0"
             self.timer_grid[row][col] = 0
-            if self.bonus > 0 and bonus_changed and self.bonus % 5 == 0:
-                self.sounds["positive"].play() 
             self.show_goal()
             self.show_score()
             self.show_bonus()
@@ -952,7 +928,7 @@ class Level(object):
         for rnum, row in enumerate(self.timer_grid):
             for cnum, cell in enumerate(row):
                 if cell and cell <= now:
-                    if self.grid[rnum][cnum][-1] <> "s" and self.grid[rnum][cnum] <> "o" and self.grid[rnum][cnum] <> "b":
+                    if self.grid[rnum][cnum][-1] <> "s" and self.grid[rnum][cnum] <> "o" and self.grid[rnum][cnum] <> "b" and self.grid[rnum][cnum] <> "e":
                         self.grid[rnum][cnum] = self.grid[rnum][cnum] + "s"
                         self.timer_grid[rnum][cnum] = now + TIMER + random.randint(0,5)
                     else:
@@ -1009,6 +985,8 @@ class Level(object):
             for cnum, cell in enumerate(row):
                 if cell == "0":
                     self.grid_area.blit(self.images['grid'], (cnum * 32, rnum * 32), (cnum * 32, rnum * 32, 32, 32))
+                elif cell == "e":
+                    self.grid_area.blit(self.images['bg_image'], (cnum * 32, rnum * 32), (cnum * 32 + GRID_OFFSET[0], rnum * 32 + GRID_OFFSET[1], 32, 32))
                 elif cell == "b":
                     self.grid_area.blit(self.images["border"], (cnum * 32, rnum * 32))
                 elif cell == "sul":
